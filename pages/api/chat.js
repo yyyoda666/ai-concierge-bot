@@ -53,15 +53,21 @@ export default async function handler(req, res) {
       fullHistory: history
     };
 
-    // Write to file (simple dump)
-    const logPath = path.join(process.cwd(), 'conversation-logs.json');
-    let logs = [];
-    if (fs.existsSync(logPath)) {
-      const existingLogs = fs.readFileSync(logPath, 'utf8');
-      logs = JSON.parse(existingLogs);
+    // Write to file (simple dump) - only in development
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const logPath = path.join(process.cwd(), 'conversation-logs.json');
+        let logs = [];
+        if (fs.existsSync(logPath)) {
+          const existingLogs = fs.readFileSync(logPath, 'utf8');
+          logs = JSON.parse(existingLogs);
+        }
+        logs.push(logData);
+        fs.writeFileSync(logPath, JSON.stringify(logs, null, 2));
+      } catch (error) {
+        console.log('File logging failed (expected in production):', error.message);
+      }
     }
-    logs.push(logData);
-    fs.writeFileSync(logPath, JSON.stringify(logs, null, 2));
 
     console.log('CONVERSATION LOG:', logData);
 
