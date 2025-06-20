@@ -11,6 +11,7 @@ export default function ChatWidget() {
   const [timeUntilAutoSubmit, setTimeUntilAutoSubmit] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [hasAutoSubmitted, setHasAutoSubmitted] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -247,6 +248,11 @@ export default function ChatWidget() {
   const sendMessage = async () => {
     if (!input.trim()) return;
 
+    // Expand the widget on first interaction
+    if (!isExpanded) {
+      setIsExpanded(true);
+    }
+
     // Cancel any pending auto-submit when user becomes active
     cancelAutoSubmit();
 
@@ -367,9 +373,11 @@ export default function ChatWidget() {
 
   return (
     <div className="chat-widget">
-      <div className="chat-header">
-        <h3>Intelligence Matters</h3>
-        <p>Tell us about your project</p>
+      <div className="chat-header" onClick={() => !isExpanded && setIsExpanded(true)}>
+        <div>
+          <h3>IM Concierge - how can we assist?</h3>
+        </div>
+        <div className="expand-indicator">💬</div>
       </div>
       
       <div className="chat-messages">
@@ -396,7 +404,7 @@ export default function ChatWidget() {
         <div ref={messagesEndRef} />
       </div>
 
-      {timeUntilAutoSubmit !== null && (
+      {timeUntilAutoSubmit !== null && isExpanded && (
         <div className="auto-submit-warning">
           ⚠️ Auto-submitting your brief in {timeUntilAutoSubmit} seconds. Send a message to cancel.
           <button onClick={cancelAutoSubmit} className="cancel-auto-submit">
@@ -434,39 +442,64 @@ export default function ChatWidget() {
         </button>
       </div>
 
-
-
       <style jsx>{`
         .chat-widget {
-          width: 400px;
-          height: 500px;
+          width: 100%;
+          max-width: 100%;
+          height: ${isExpanded ? 'min(70vh, 600px)' : '80px'};
+          min-height: 80px;
           border: 1px solid #ddd;
-          border-radius: 8px;
+          border-radius: 12px;
           display: flex;
           flex-direction: column;
           background: white;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+          transition: height 0.3s ease-in-out, box-shadow 0.3s ease;
+          overflow: hidden;
+          position: relative;
+        }
+        .chat-widget:hover {
+          box-shadow: 0 6px 25px rgba(0,0,0,0.15);
         }
         .chat-header {
-          padding: 16px;
-          border-bottom: 1px solid #eee;
-          background: #f9f9f9;
+          padding: ${isExpanded ? '16px' : '12px 16px'};
+          border-bottom: ${isExpanded ? '1px solid #eee' : 'none'};
+          background: linear-gradient(135deg, #000 0%, #333 100%);
+          color: white;
+          cursor: ${!isExpanded ? 'pointer' : 'default'};
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          min-height: ${isExpanded ? 'auto' : '56px'};
+        }
+        .chat-header:hover {
+          background: ${!isExpanded ? 'linear-gradient(135deg, #111 0%, #444 100%)' : 'linear-gradient(135deg, #000 0%, #333 100%)'};
         }
         .chat-header h3 {
-          margin: 0 0 4px 0;
-          font-size: 16px;
+          margin: 0;
+          font-size: ${isExpanded ? '18px' : '16px'};
+          font-weight: 600;
         }
         .chat-header p {
           margin: 0;
-          color: #666;
-          font-size: 14px;
+          color: rgba(255,255,255,0.8);
+          font-size: ${isExpanded ? '14px' : '13px'};
+          display: ${isExpanded ? 'block' : 'none'};
+        }
+        .expand-indicator {
+          font-size: 20px;
+          opacity: 0.7;
+          transition: transform 0.3s ease;
+          display: ${isExpanded ? 'none' : 'block'};
         }
         .chat-messages {
           flex: 1;
           overflow-y: auto;
-          padding: 16px;
-          display: flex;
+          padding: ${isExpanded ? '16px' : '0'};
+          display: ${isExpanded ? 'flex' : 'none'};
           flex-direction: column;
           gap: 12px;
+          min-height: 0;
         }
         .message {
           display: flex;
@@ -500,10 +533,11 @@ export default function ChatWidget() {
           50% { opacity: 0.5; }
         }
         .chat-input {
-          padding: 16px;
-          border-top: 1px solid #eee;
-          display: flex;
+          padding: ${isExpanded ? '16px' : '0'};
+          border-top: ${isExpanded ? '1px solid #eee' : 'none'};
+          display: ${isExpanded ? 'flex' : 'none'};
           gap: 8px;
+          background: white;
         }
         .chat-input input {
           flex: 1;
@@ -618,6 +652,45 @@ export default function ChatWidget() {
         .file-name {
           font-size: 12px;
           opacity: 0.8;
+        }
+
+        /* Responsive Design for Embedding */
+        @media (max-width: 768px) {
+          .chat-widget {
+            height: ${isExpanded ? 'min(80vh, 500px)' : '70px'};
+            border-radius: 8px;
+          }
+          .chat-header {
+            padding: ${isExpanded ? '12px' : '8px 12px'};
+            min-height: ${isExpanded ? 'auto' : '54px'};
+          }
+          .chat-header h3 {
+            font-size: ${isExpanded ? '16px' : '15px'};
+          }
+          .chat-messages {
+            padding: ${isExpanded ? '12px' : '0'};
+            gap: 10px;
+          }
+          .chat-input {
+            padding: ${isExpanded ? '12px' : '0'};
+            gap: 6px;
+          }
+          .message-content {
+            max-width: 85%;
+            font-size: 13px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .chat-widget {
+            height: ${isExpanded ? 'min(85vh, 450px)' : '65px'};
+          }
+          .chat-header h3 {
+            font-size: ${isExpanded ? '15px' : '14px'};
+          }
+          .expand-indicator {
+            font-size: 18px;
+          }
         }
       `}</style>
     </div>
