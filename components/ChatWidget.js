@@ -373,12 +373,13 @@ export default function ChatWidget() {
 
   return (
     <div className="chat-widget">
-      <div className="chat-header" onClick={() => !isExpanded && setIsExpanded(true)}>
-        <div>
-          <h3>IM Concierge - how can we assist?</h3>
+      {isExpanded && (
+        <div className="chat-header">
+          <div>
+            <h3>IM Concierge</h3>
+          </div>
         </div>
-        <div className="expand-indicator">💬</div>
-      </div>
+      )}
       
       <div className="chat-messages">
         {messages.map((msg, idx) => (
@@ -421,24 +422,26 @@ export default function ChatWidget() {
           accept="image/*"
           style={{ display: 'none' }}
         />
-        <button 
-          onClick={triggerFileUpload} 
-          disabled={isLoading || isUploading}
-          className="file-upload-btn"
-          title="Upload image"
-        >
-          {isUploading ? '⏳' : '📎'}
-        </button>
+        {isExpanded && (
+          <button 
+            onClick={triggerFileUpload} 
+            disabled={isLoading || isUploading}
+            className="file-upload-btn"
+            title="Upload image"
+          >
+            {isUploading ? '⏳' : '📎'}
+          </button>
+        )}
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder={showSubmitMode ? "Ready to submit your brief, or send a message to add more..." : "Type your message..."}
+          placeholder={showSubmitMode ? "Ready to submit your brief, or send a message to add more..." : isExpanded ? "Type your message..." : "Message IM Concierge..."}
           disabled={isLoading || isUploading}
         />
         <button onClick={showSubmitMode ? submitBrief : sendMessage} disabled={(!input.trim() && !showSubmitMode) || isLoading || isSubmitting || isUploading}>
-          {isSubmitting ? 'Submitting...' : showSubmitMode ? 'Submit Brief' : 'Send'}
+          {isSubmitting ? 'Submitting...' : showSubmitMode ? 'Submit Brief' : '↗'}
         </button>
       </div>
 
@@ -446,51 +449,31 @@ export default function ChatWidget() {
         .chat-widget {
           width: 100%;
           max-width: 100%;
-          height: ${isExpanded ? 'min(70vh, 600px)' : '80px'};
-          min-height: 80px;
-          border: 1px solid #ddd;
-          border-radius: 12px;
+          height: ${isExpanded ? 'min(70vh, 600px)' : 'auto'};
+          min-height: ${isExpanded ? '400px' : 'auto'};
+          border: ${isExpanded ? '1px solid #ddd' : 'none'};
+          border-radius: ${isExpanded ? '12px' : '0'};
           display: flex;
           flex-direction: column;
-          background: white;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-          transition: height 0.3s ease-in-out, box-shadow 0.3s ease;
+          background: ${isExpanded ? 'white' : 'transparent'};
+          box-shadow: ${isExpanded ? '0 4px 20px rgba(0,0,0,0.1)' : 'none'};
+          transition: all 0.3s ease-in-out;
           overflow: hidden;
           position: relative;
         }
-        .chat-widget:hover {
-          box-shadow: 0 6px 25px rgba(0,0,0,0.15);
-        }
         .chat-header {
-          padding: ${isExpanded ? '16px' : '12px 16px'};
-          border-bottom: ${isExpanded ? '1px solid #eee' : 'none'};
+          padding: 16px;
+          border-bottom: 1px solid #eee;
           background: linear-gradient(135deg, #000 0%, #333 100%);
           color: white;
-          cursor: ${!isExpanded ? 'pointer' : 'default'};
           display: flex;
           justify-content: space-between;
           align-items: center;
-          min-height: ${isExpanded ? 'auto' : '56px'};
-        }
-        .chat-header:hover {
-          background: ${!isExpanded ? 'linear-gradient(135deg, #111 0%, #444 100%)' : 'linear-gradient(135deg, #000 0%, #333 100%)'};
         }
         .chat-header h3 {
           margin: 0;
-          font-size: ${isExpanded ? '18px' : '16px'};
+          font-size: 18px;
           font-weight: 600;
-        }
-        .chat-header p {
-          margin: 0;
-          color: rgba(255,255,255,0.8);
-          font-size: ${isExpanded ? '14px' : '13px'};
-          display: ${isExpanded ? 'block' : 'none'};
-        }
-        .expand-indicator {
-          font-size: 20px;
-          opacity: 0.7;
-          transition: transform 0.3s ease;
-          display: ${isExpanded ? 'none' : 'block'};
         }
         .chat-messages {
           flex: 1;
@@ -535,27 +518,35 @@ export default function ChatWidget() {
         .chat-input {
           padding: ${isExpanded ? '16px' : '0'};
           border-top: ${isExpanded ? '1px solid #eee' : 'none'};
-          display: ${isExpanded ? 'flex' : 'none'};
+          display: flex;
           gap: 8px;
-          background: white;
+          background: ${isExpanded ? 'white' : 'transparent'};
         }
         .chat-input input {
           flex: 1;
-          padding: 8px 12px;
+          padding: ${isExpanded ? '12px 16px' : '16px 20px'};
           border: 1px solid #ddd;
-          border-radius: 20px;
+          border-radius: ${isExpanded ? '12px' : '25px'};
           outline: none;
+          font-size: ${isExpanded ? '14px' : '16px'};
+          background: white;
+          box-shadow: ${isExpanded ? 'none' : '0 2px 10px rgba(0,0,0,0.1)'};
+          transition: all 0.2s ease;
         }
         .chat-input input:focus {
           border-color: #000;
+          box-shadow: ${isExpanded ? '0 0 0 2px rgba(0,0,0,0.1)' : '0 2px 15px rgba(0,0,0,0.15)'};
         }
         .chat-input button {
-          padding: 8px 16px;
+          padding: ${isExpanded ? '12px 16px' : '16px 20px'};
           background: #000;
           color: white;
           border: none;
-          border-radius: 20px;
+          border-radius: ${isExpanded ? '12px' : '25px'};
           cursor: pointer;
+          font-size: ${isExpanded ? '14px' : '16px'};
+          min-width: ${isExpanded ? 'auto' : '60px'};
+          transition: all 0.2s ease;
         }
         .chat-input button:disabled {
           opacity: 0.5;
