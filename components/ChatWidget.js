@@ -10,6 +10,7 @@ export default function ChatWidget() {
   const [autoSubmitTimer, setAutoSubmitTimer] = useState(null);
   const [timeUntilAutoSubmit, setTimeUntilAutoSubmit] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [hasAutoSubmitted, setHasAutoSubmitted] = useState(false);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -27,6 +28,9 @@ export default function ChatWidget() {
 
   // Function to check if conversation is ready for auto-submit
   const isConversationReadyForAutoSubmit = () => {
+    // Don't auto-submit if we already have
+    if (hasAutoSubmitted) return false;
+    
     const hasProjectContent = messages.some(msg => 
       msg.type === 'bot' && (
         msg.content.toLowerCase().includes('brief') ||
@@ -116,6 +120,9 @@ export default function ChatWidget() {
       const data = await response.json();
       
       if (data.success) {
+        // Mark as auto-submitted to prevent future auto-submits
+        setHasAutoSubmitted(true);
+        
         setMessages(prev => [...prev, { 
           type: 'bot', 
           content: 'I\'ve automatically submitted your brief since we had such a great conversation! Our team will review it and get back to you soon. Feel free to continue chatting if you\'d like to add more details or have other questions.' 
