@@ -1,6 +1,6 @@
+import { put } from '@vercel/blob';
 import formidable from 'formidable';
 import fs from 'fs';
-import path from 'path';
 
 // Disable Next.js default body parser to handle file uploads
 export const config = {
@@ -15,15 +15,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Create uploads directory if it doesn't exist
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-
     // Configure formidable for file parsing
     const form = formidable({
-      uploadDir: uploadsDir,
       keepExtensions: true,
       maxFileSize: 10 * 1024 * 1024, // 10MB limit
       filter: ({ mimetype }) => {
@@ -40,14 +33,23 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
+    // Read the file data
+    const fileBuffer = fs.readFileSync(uploadedFile.filepath);
+    
     // Generate a unique filename with timestamp
     const timestamp = Date.now();
-    const fileExtension = path.extname(uploadedFile.originalFilename || '');
-    const newFilename = `upload_${timestamp}${fileExtension}`;
-    const newPath = path.join(uploadsDir, newFilename);
+    const fileExtension = uploadedFile.originalFilename ? 
+      uploadedFile.originalFilename.split('.').pop() : 'jpg';
+    const newFilename = `upload_${timestamp}.${fileExtension}`;
 
-    // Move file to final location
-    fs.renameSync(uploadedFile.filepath, newPath);
+    // Upload to Vercel Blob
+    const blob = await put(newFilename, fileBuffer, {
+      access: 'public',
+      contentType: uploadedFile.mimetype || 'image/jpeg'
+    });
+
+    // Clean up temporary file
+    fs.unlinkSync(uploadedFile.filepath);
 
     // Return file information
     const fileInfo = {
@@ -55,11 +57,11 @@ export default async function handler(req, res) {
       originalName: uploadedFile.originalFilename,
       size: uploadedFile.size,
       mimetype: uploadedFile.mimetype,
-      url: `/uploads/${newFilename}`,
+      url: blob.url, // This is the public URL from Vercel Blob
       uploadedAt: new Date().toISOString()
     };
 
-    console.log('File uploaded successfully:', fileInfo);
+    console.log('File uploaded successfully to Vercel Blob:', fileInfo);
 
     res.status(200).json({
       success: true,

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.54.0",
+    "@vercel/blob": "^1.1.1",
     "axios": "^1.6.7",
     "formidable": "^3.5.4",
     "next": "^14.1.0",
