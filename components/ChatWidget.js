@@ -23,8 +23,15 @@ export default function ChatWidget() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Only scroll when bot responds, not on every message
   useEffect(() => {
-    scrollToBottom();
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      // Only scroll for bot messages (responses), not user messages
+      if (lastMessage.type === 'bot') {
+        scrollToBottom();
+      }
+    }
   }, [messages]);
 
   // Communicate height changes to parent iframe
