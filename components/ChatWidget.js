@@ -27,6 +27,14 @@ export default function ChatWidget() {
     scrollToBottom();
   }, [messages]);
 
+  // Communicate height changes to parent iframe
+  useEffect(() => {
+    const height = isExpanded ? 500 : 60;
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'resize', height }, '*');
+    }
+  }, [isExpanded]);
+
   // Function to check if conversation is ready for auto-submit
   const isConversationReadyForAutoSubmit = () => {
     // Don't auto-submit if we already have
@@ -373,13 +381,6 @@ export default function ChatWidget() {
 
   return (
     <div className="chat-widget">
-      {isExpanded && (
-        <div className="chat-header">
-          <div>
-            <h3>IM Concierge</h3>
-          </div>
-        </div>
-      )}
       
       <div className="chat-messages">
         {messages.map((msg, idx) => (
@@ -449,8 +450,8 @@ export default function ChatWidget() {
         .chat-widget {
           width: 100%;
           max-width: 100%;
-          height: ${isExpanded ? 'min(70vh, 600px)' : 'auto'};
-          min-height: ${isExpanded ? '400px' : 'auto'};
+          height: ${isExpanded ? '500px' : '60px'};
+          min-height: ${isExpanded ? '500px' : '60px'};
           border: ${isExpanded ? '1px solid #ddd' : 'none'};
           border-radius: ${isExpanded ? '12px' : '0'};
           display: flex;
@@ -461,20 +462,7 @@ export default function ChatWidget() {
           overflow: hidden;
           position: relative;
         }
-        .chat-header {
-          padding: 16px;
-          border-bottom: 1px solid #eee;
-          background: linear-gradient(135deg, #000 0%, #333 100%);
-          color: white;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-        .chat-header h3 {
-          margin: 0;
-          font-size: 18px;
-          font-weight: 600;
-        }
+
         .chat-messages {
           flex: 1;
           overflow-y: auto;
