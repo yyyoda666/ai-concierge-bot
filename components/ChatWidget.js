@@ -12,27 +12,14 @@ export default function ChatWidget() {
   const [isUploading, setIsUploading] = useState(false);
   const [hasAutoSubmitted, setHasAutoSubmitted] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const messagesEndRef = useRef(null);
+
   const fileInputRef = useRef(null);
 
   // Auto-submit configuration
   const AUTO_SUBMIT_DELAY = 5 * 60 * 1000; // 5 minutes in milliseconds
   const WARNING_TIME = 60 * 1000; // Show warning 1 minute before auto-submit
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
 
-  // Only scroll when bot responds, not on every message
-  useEffect(() => {
-    if (messages.length > 0) {
-      const lastMessage = messages[messages.length - 1];
-      // Only scroll for bot messages (responses), not user messages
-      if (lastMessage.type === 'bot') {
-        scrollToBottom();
-      }
-    }
-  }, [messages]);
 
   // Communicate height changes to parent iframe
   useEffect(() => {
@@ -410,7 +397,7 @@ export default function ChatWidget() {
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
+        
       </div>
 
       {timeUntilAutoSubmit !== null && isExpanded && (
