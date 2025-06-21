@@ -12,6 +12,7 @@ export default function ChatWidget() {
   const [isUploading, setIsUploading] = useState(false);
   const [hasAutoSubmitted, setHasAutoSubmitted] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [stagedFile, setStagedFile] = useState(null); // New state for staged file
 
   const fileInputRef = useRef(null);
 
@@ -101,7 +102,9 @@ export default function ChatWidget() {
     try {
       const conversationHistory = messages.map(msg => ({
         role: msg.type === 'user' ? 'user' : 'assistant',
-        content: msg.content
+        content: msg.content,
+        // Include file information if present
+        ...(msg.file && { file: msg.file })
       }));
 
       // Add auto-submit flag to the conversation
@@ -152,15 +155,12 @@ export default function ChatWidget() {
     setTimeUntilAutoSubmit(null);
   };
 
-  // File upload handling
-  const handleFileUpload = async (file, fileType = null) => {
+  // File upload handling - now stages file instead of auto-sending
+  const handleFileUpload = async (file) => {
     if (!file) return;
 
     // Cancel any pending auto-submit when user becomes active
     cancelAutoSubmit();
-
-    // Use the file type specified by the button clicked
-    const uploadType = fileType || 'product'; // Default to product if somehow no type
 
     setIsUploading(true);
     
@@ -176,34 +176,11 @@ export default function ChatWidget() {
       const data = await response.json();
 
       if (data.success) {
-        // Add file message to chat with type indicator
-        const typeIcon = uploadType === 'product' ? '📦' : '🎨';
-        const typeLabel = uploadType === 'product' ? 'Product Image' : 'Style Reference';
-        const fileMessage = `${typeIcon} Uploaded ${typeLabel}: ${data.file.originalName}`;
+        // Stage the file instead of sending immediately
+        setStagedFile(data.file);
         
-        setMessages(prev => [...prev, { 
-          type: 'user', 
-          content: fileMessage,
-          file: { ...data.file, uploadType }
-        }]);
-
-        // Send to AI with file context and type
-        const contextMessage = uploadType === 'product' 
-          ? `User uploaded a PRODUCT IMAGE: ${data.file.originalName}. This is their actual product that needs to be photographed. Please acknowledge and ask relevant questions about the product itself (e.g., "Thanks for showing me your product! What angles or features do you want to highlight?" or "Great! Is this the only product variation you need shot?")`
-          : `User uploaded a STYLE REFERENCE: ${data.file.originalName}. This is an inspiration/example of the aesthetic they want. Please acknowledge and ask relevant questions about the style (e.g., "Perfect reference! Is this the exact style you're looking for?" or "Great inspiration! Do you want to match this lighting/composition exactly?")`;
-
-        const aiResponse = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: contextMessage,
-            conversationId: conversationId,
-            fileInfo: { ...data.file, uploadType }
-          })
-        });
-
-        const aiData = await aiResponse.json();
-        setMessages(prev => [...prev, { type: 'bot', content: aiData.response }]);
+        // Optionally show a preview message in the input area
+        setInput(prev => prev ? `${prev}\n📎 ${data.file.originalName}` : `📎 ${data.file.originalName}`);
         
       } else {
         alert('Upload failed: ' + (data.details || 'Unknown error'));
@@ -224,10 +201,8 @@ export default function ChatWidget() {
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Determine file type based on conversation context
-      const lastBotMessage = messages.filter(msg => msg.type === 'bot').pop()?.content || '';
-      const fileType = lastBotMessage.toLowerCase().includes('product') ? 'product' : 'reference';
-      handleFileUpload(file, fileType);
+      // Simple generic file upload - let the AI figure out the context
+      handleFileUpload(file);
       // Reset file input
       e.target.value = '';
     }
@@ -248,7 +223,7 @@ export default function ChatWidget() {
   }, [autoSubmitTimer]);
 
   const sendMessage = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() && !stagedFile) return;
 
     // Expand the widget on first interaction
     if (!isExpanded) {
@@ -259,8 +234,19 @@ export default function ChatWidget() {
     cancelAutoSubmit();
 
     const userMessage = input.trim();
+    const messageWithFile = stagedFile; // Capture staged file before clearing
+    
     setInput('');
-    setMessages(prev => [...prev, { type: 'user', content: userMessage }]);
+    setStagedFile(null); // Clear staged file
+    
+    // Add user message with optional file attachment
+    const userMessageObj = { 
+      type: 'user', 
+      content: userMessage || `📎 ${messageWithFile.originalName}`,
+      ...(messageWithFile && { file: messageWithFile })
+    };
+    
+    setMessages(prev => [...prev, userMessageObj]);
     setIsLoading(true);
 
     try {
@@ -268,8 +254,9 @@ export default function ChatWidget() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: userMessage,
-          conversationId: conversationId
+          message: userMessage || `User uploaded an image: ${messageWithFile.originalName}`,
+          conversationId: conversationId,
+          ...(messageWithFile && { fileInfo: messageWithFile })
         })
       });
 
@@ -336,7 +323,9 @@ export default function ChatWidget() {
       // Convert messages format to match API expectations
       const conversationHistory = messages.map(msg => ({
         role: msg.type === 'user' ? 'user' : 'assistant',
-        content: msg.content
+        content: msg.content,
+        // Include file information if present
+        ...(msg.file && { file: msg.file })
       }));
 
       const response = await fetch('/api/submit-brief', {
@@ -409,6 +398,22 @@ export default function ChatWidget() {
         </div>
       )}
 
+      {/* Staged file indicator */}
+      {stagedFile && isExpanded && (
+        <div className="staged-file-indicator">
+          <div className="staged-file-preview">
+            <img src={stagedFile.url} alt={stagedFile.originalName} className="staged-image-preview" />
+            <div className="staged-file-info">
+              <span className="staged-file-name">📎 {stagedFile.originalName}</span>
+              <span className="staged-file-hint">Add a message and press send</span>
+            </div>
+            <button onClick={() => setStagedFile(null)} className="remove-staged-file" title="Remove file">
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="chat-input">
         <input
           type="file"
@@ -432,10 +437,10 @@ export default function ChatWidget() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder={showSubmitMode ? "Ready to submit your brief, or send a message to add more..." : isExpanded ? "Type your message..." : "Message IM Concierge..."}
+          placeholder={stagedFile ? "Add a message for your uploaded image..." : showSubmitMode ? "Ready to submit your brief, or send a message to add more..." : isExpanded ? "Type your message..." : "Message IM Concierge..."}
           disabled={isLoading || isUploading}
         />
-        <button onClick={showSubmitMode ? submitBrief : sendMessage} disabled={(!input.trim() && !showSubmitMode) || isLoading || isSubmitting || isUploading}>
+        <button onClick={showSubmitMode ? submitBrief : sendMessage} disabled={(!input.trim() && !stagedFile && !showSubmitMode) || isLoading || isSubmitting || isUploading}>
           {isSubmitting ? 'Submitting...' : showSubmitMode ? 'Submit Brief' : '↗'}
         </button>
       </div>
@@ -625,6 +630,64 @@ export default function ChatWidget() {
         .file-name {
           font-size: 12px;
           opacity: 0.8;
+        }
+
+        /* Staged file indicator styles */
+        .staged-file-indicator {
+          padding: 12px 16px;
+          border-top: 1px solid #eee;
+          background: #f8f9fa;
+        }
+        .staged-file-preview {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 8px 12px;
+          background: white;
+          border: 1px solid #ddd;
+          border-radius: 8px;
+          position: relative;
+        }
+        .staged-image-preview {
+          width: 40px;
+          height: 40px;
+          object-fit: cover;
+          border-radius: 4px;
+          border: 1px solid #ddd;
+        }
+        .staged-file-info {
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          gap: 2px;
+        }
+        .staged-file-name {
+          font-size: 14px;
+          font-weight: 500;
+          color: #333;
+        }
+        .staged-file-hint {
+          font-size: 12px;
+          color: #666;
+        }
+        .remove-staged-file {
+          position: absolute;
+          top: 4px;
+          right: 4px;
+          background: rgba(0, 0, 0, 0.7);
+          color: white;
+          border: none;
+          border-radius: 50%;
+          width: 20px;
+          height: 20px;
+          cursor: pointer;
+          font-size: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .remove-staged-file:hover {
+          background: rgba(0, 0, 0, 0.9);
         }
 
         /* Responsive Design for Embedding */
