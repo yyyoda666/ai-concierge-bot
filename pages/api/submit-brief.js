@@ -19,8 +19,33 @@ export default async function handler(req, res) {
     const { conversationHistory, conversationId } = req.body;
     console.log('Conversation length:', conversationHistory?.length);
 
-    // RIGID JSON structure for consistent Relay.app webhook integration
-    const extractionPrompt = `Analyze this conversation and extract information into this EXACT JSON structure.
+    // Extract any uploaded files from conversation and let AI categorize them
+    const uploadedFiles = conversationHistory
+      .filter(msg => msg.role === 'user' && msg.content.includes('📎 Uploaded:'))
+      .map((msg, index) => {
+        const fileName = msg.content.replace('📎 Uploaded: ', '');
+        
+        // Find the actual file info from the same message (it should have both content and file)
+        const fileInfo = msg.file;
+        
+        return {
+          fileName,
+          originalName: fileName,
+          url: fileInfo?.url || null,
+          size: fileInfo?.size,
+          mimetype: fileInfo?.mimetype,
+          uploadOrder: index + 1 // Track order for categorization
+        };
+      });
+
+    // Enhanced AI prompt that includes file categorization
+    const enhancedExtractionPrompt = `Analyze this conversation and extract information into this EXACT JSON structure.
+
+IMPORTANT: The conversation includes ${uploadedFiles.length} uploaded files. Based on the conversation context, categorize each file as either:
+- "product" (user's actual product they want photographed)
+- "reference" (style inspiration/example they want to emulate)
+
+Files uploaded in order: ${uploadedFiles.map((f, i) => `${i + 1}. ${f.originalName}`).join(', ')}
 
 CRITICAL: You MUST return exactly this JSON structure with these exact field names. Never add, remove, or rename fields.
 
@@ -46,7 +71,8 @@ REQUIRED JSON STRUCTURE:
   "keyTopics": "string - comma-separated list of main topics discussed",
   "nextSteps": "string - what should happen next", 
   "missingInfo": "string - what information is still needed",
-  "conversationSummary": "string - 2-3 sentence summary of the conversation"
+  "conversationSummary": "string - 2-3 sentence summary of the conversation",
+  "fileCategories": [${uploadedFiles.map((f, i) => `{"uploadOrder": ${i + 1}, "fileName": "${f.originalName}", "type": "product|reference", "reasoning": "brief explanation"}`).join(', ')}]
 }
 
 FIELD DEFINITIONS:
@@ -54,6 +80,7 @@ FIELD DEFINITIONS:
 - serviceCategory: "production"=final assets, "concepts"=creative work, "labs"=AI exploration, "unclear"=not determined
 - readinessLevel: "browsing"=just looking, "interested"=considering, "ready"=wants to proceed, "qualified"=serious prospect
 - engagementLevel: "low"=casual interest, "medium"=asking questions, "high"=detailed discussion
+- fileCategories: Categorize each uploaded file based on conversation context
 
 Use "Not provided" for missing contact info. Use "Unclear" for classification fields when uncertain.
 Be specific and detailed in projectBrief and conversationSummary.
@@ -61,11 +88,11 @@ Be specific and detailed in projectBrief and conversationSummary.
 Conversation to analyze:
 ${conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n')}`;
 
-    console.log('Calling Anthropic for progressive disclosure extraction...');
+    console.log('Calling Anthropic for enhanced extraction with file categorization...');
     const extractionResponse = await anthropic.messages.create({
       model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 1500,
-      messages: [{ role: 'user', content: extractionPrompt }]
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: enhancedExtractionPrompt }]
     });
 
     const aiExtraction = extractionResponse.content[0].text;
@@ -108,37 +135,40 @@ ${conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).jo
       };
     }
 
-    // Extract any uploaded files from conversation with categorization
-    const uploadedFiles = conversationHistory
-      .filter(msg => msg.role === 'user' && (msg.content.includes('📦 Uploaded') || msg.content.includes('🎨 Uploaded')))
-      .map(msg => {
-        const isProduct = msg.content.includes('📦 Uploaded Product Image:');
-        const fileName = msg.content.replace(/^[📦🎨] Uploaded (Product Image|Style Reference): /, '');
-        
-        // Find the actual file info from the message
-        const fileMessage = conversationHistory.find(m => 
-          m.role === 'user' && m.file && m.file.originalName === fileName
-        );
-        
-        return {
-          fileName,
-          originalName: fileName,
-          type: isProduct ? 'product' : 'reference',
-          category: isProduct ? 'Product Image' : 'Style Reference',
-          // Add full public URL for Relay to access
-          url: fileMessage?.file ? `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3001'}${fileMessage.file.url}` : null,
-          size: fileMessage?.file?.size,
-          mimetype: fileMessage?.file?.mimetype
-        };
-      });
+    // Process AI's file categorization with flatter structure for Relay
+    const categorizedUploadedFiles = uploadedFiles.map(file => {
+      // Find corresponding categorization from AI
+      const aiCategory = leadData.fileCategories?.find(cat => cat.fileName === file.originalName);
+      
+      return {
+        fileName: file.fileName,
+        originalName: file.originalName,
+        type: aiCategory?.type || 'uncategorized',
+        category: aiCategory?.type === 'product' ? 'Product Image' : aiCategory?.type === 'reference' ? 'Style Reference' : 'Uploaded File',
+        url: file.url, // Keep original field name for compatibility
+        fileUrl: file.url, // Also provide new field name for Relay
+        size: file.size,
+        fileSize: file.size, // Also provide new field name
+        mimetype: file.mimetype,
+        fileType: file.mimetype, // Also provide new field name
+        reasoning: aiCategory?.reasoning || 'Not categorized by AI'
+      };
+    });
 
-    // Separate product images and style references for better organization
-    const productImages = uploadedFiles.filter(f => f.type === 'product');
-    const styleReferences = uploadedFiles.filter(f => f.type === 'reference');
+    // Separate for easier access in automation - with direct URL access
+    const productImages = categorizedUploadedFiles.filter(f => f.type === 'product');
+    const styleReferences = categorizedUploadedFiles.filter(f => f.type === 'reference');
 
-          // Add system metadata (consistent with rigid structure)
+    // Create simple URL arrays for easier Relay processing
+    const productImageUrls = productImages.map(f => f.fileUrl).filter(Boolean);
+    const styleReferenceUrls = styleReferences.map(f => f.fileUrl).filter(Boolean);
+
+    // Remove fileCategories from leadData since we've processed it
+    const { fileCategories, ...cleanLeadData } = leadData;
+
+    // Add system metadata (consistent with rigid structure)
     const finalPayload = {
-      ...leadData,
+      ...cleanLeadData,
       // System metadata
       conversationId: conversationId,
       timestamp: new Date().toISOString(),
@@ -146,13 +176,18 @@ ${conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).jo
       conversationLength: conversationHistory?.length || 0,
       extractedAt: new Date().toISOString(),
       // Enhanced file categorization
-      uploadedFiles: uploadedFiles.length > 0 ? uploadedFiles : undefined,
-      productImages: productImages.length > 0 ? productImages : undefined,
-      styleReferences: styleReferences.length > 0 ? styleReferences : undefined,
+      uploadedFiles: categorizedUploadedFiles.length > 0 ? categorizedUploadedFiles : undefined,
+      // Simplified URL arrays for Relay
+      productImageUrls: productImageUrls.length > 0 ? productImageUrls : undefined,
+      styleReferenceUrls: styleReferenceUrls.length > 0 ? styleReferenceUrls : undefined,
+      // File counts for easier automation logic
+      totalFiles: categorizedUploadedFiles.length,
+      productImageCount: productImages.length,
+      styleReferenceCount: styleReferences.length,
       autoSubmit: req.body.autoSubmit || false,
       // Reference for later file uploads
       emailReference: `Project REF: ${conversationId}`,
-      fileUploadInstructions: uploadedFiles.length === 0 ? 
+      fileUploadInstructions: categorizedUploadedFiles.length === 0 ? 
         `To send files later, email them to jacob@intelligencematters.se with subject: "Project REF: ${conversationId}". Please specify if sending PRODUCT IMAGES (your actual products) or STYLE REFERENCES (inspiration examples).` : 
         undefined
     };
@@ -187,9 +222,9 @@ ${conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).jo
       message: 'Rigid JSON structure submitted successfully to Relay.app',
       leadData: finalPayload,
       quickAnalysis: {
-        requestType: leadData.requestType,
-        readinessLevel: leadData.readinessLevel,
-        nextSteps: leadData.nextSteps
+        requestType: cleanLeadData.requestType,
+        readinessLevel: cleanLeadData.readinessLevel,
+        nextSteps: cleanLeadData.nextSteps
       }
     });
 
