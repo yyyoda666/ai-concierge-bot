@@ -242,7 +242,41 @@ ${(conversationHistory || []).map(msg => `${msg.role.toUpperCase()}: ${msg.conte
     console.log('Sending RIGID JSON to Relay.app...');
     console.log('Webhook URL:', RELAY_WEBHOOK_URL);
     console.log('Payload size:', JSON.stringify(finalPayload).length, 'characters');
-    console.log('Payload preview:', JSON.stringify(finalPayload, null, 2).substring(0, 500) + '...');
+    
+    // DEBUG: File payload verification
+    console.log('=== FILE PAYLOAD DEBUG ===');
+    console.log('uploadedFiles array length:', categorizedUploadedFiles.length);
+    console.log('productImageUrls:', productImageUrls);
+    console.log('styleReferenceUrls:', styleReferenceUrls);
+    console.log('totalFiles:', finalPayload.totalFiles);
+    
+    if (categorizedUploadedFiles.length > 0) {
+      console.log('uploadedFiles in payload:');
+      categorizedUploadedFiles.forEach((file, i) => {
+        console.log(`  File ${i}:`, {
+          fileName: file.fileName,
+          fileUrl: file.fileUrl,
+          type: file.type,
+          category: file.category
+        });
+      });
+    } else {
+      console.log('WARNING: No files found in uploadedFiles array');
+    }
+    
+    // Show full payload structure for file-related fields
+    const fileFields = {
+      uploadedFiles: finalPayload.uploadedFiles,
+      productImageUrls: finalPayload.productImageUrls,
+      styleReferenceUrls: finalPayload.styleReferenceUrls,
+      totalFiles: finalPayload.totalFiles,
+      productImageCount: finalPayload.productImageCount,
+      styleReferenceCount: finalPayload.styleReferenceCount
+    };
+    console.log('File-related payload fields:', JSON.stringify(fileFields, null, 2));
+    console.log('=== END FILE PAYLOAD DEBUG ===');
+    
+    console.log('FULL PAYLOAD:', JSON.stringify(finalPayload, null, 2));
 
     // Send to Relay.app webhook
     const webhookResponse = await fetch(RELAY_WEBHOOK_URL, {
