@@ -12,6 +12,11 @@ out/
 # User uploads (prospect images shouldn't be in version control)
 public/uploads/
 
+# Private project documentation
+PRIVATE-project-notes.md
+conversation-logs.json
+conversation-memory.json
+
 # Mac system files
 .DS_Store
 .DS_Store?

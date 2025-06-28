@@ -4,8 +4,8 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-// Relay.app webhook URL
-const RELAY_WEBHOOK_URL = 'https://hook.relay.app/api/v1/playbook/cmc0vmws00yog0om4hdzv5y08/trigger/Kiu7f2kCDRcPkdMEY7WNUw';
+// Relay.app webhook URL (from environment variable for security)
+const RELAY_WEBHOOK_URL = process.env.RELAY_WEBHOOK_URL;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
