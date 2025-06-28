@@ -320,6 +320,23 @@ export default function ChatWidget() {
     setIsSubmitting(true);
     
     try {
+      // ===== DEBUG CODE START =====
+      console.log('=== MESSAGE CONVERSION DEBUG ===');
+      console.log('Total messages:', messages.length);
+      const messagesWithFiles = messages.filter(msg => msg.file);
+      console.log('Messages with files BEFORE conversion:', messagesWithFiles.length);
+      
+      messagesWithFiles.forEach((msg, i) => {
+        console.log(`UI Message ${i} with file:`, {
+          content: msg.content.substring(0, 50) + '...',
+          hasFile: !!msg.file,
+          fileUrl: msg.file?.url,
+          fileName: msg.file?.originalName,
+          fileKeys: msg.file ? Object.keys(msg.file) : 'none'
+        });
+      });
+      // ===== DEBUG CODE END =====
+
       // Convert messages format to match API expectations
       const conversationHistory = messages.map(msg => ({
         role: msg.type === 'user' ? 'user' : 'assistant',
@@ -327,6 +344,22 @@ export default function ChatWidget() {
         // Include file information if present
         ...(msg.file && { file: msg.file })
       }));
+
+      // ===== MORE DEBUG CODE START =====
+      const historyWithFiles = conversationHistory.filter(msg => msg.file);
+      console.log('Messages with files AFTER conversion:', historyWithFiles.length);
+      
+      historyWithFiles.forEach((msg, i) => {
+        console.log(`Converted Message ${i} with file:`, {
+          content: msg.content.substring(0, 50) + '...',
+          hasFile: !!msg.file,
+          fileUrl: msg.file?.url,
+          fileName: msg.file?.originalName,
+          role: msg.role
+        });
+      });
+      console.log('=== END MESSAGE CONVERSION DEBUG ===');
+      // ===== MORE DEBUG CODE END =====
 
       const response = await fetch('/api/submit-brief', {
         method: 'POST',
