@@ -36,12 +36,41 @@ export default async function handler(req, res) {
     }
     
     console.log('Conversation length:', conversationHistory?.length);
+    
+    // Debug: Log messages to understand file upload format
+    const fileMessages = conversationHistory.filter(msg => 
+      msg.role === 'user' && (msg.content.includes('📎') || msg.content.includes('User uploaded'))
+    );
+    console.log('File upload messages found:', fileMessages.length);
+    fileMessages.forEach((msg, i) => {
+      console.log(`File message ${i}:`, {
+        content: msg.content.substring(0, 100),
+        hasFileProperty: !!msg.file,
+        fileKeys: msg.file ? Object.keys(msg.file) : 'none'
+      });
+    });
 
     // Extract any uploaded files from conversation and let AI categorize them
     const uploadedFiles = (conversationHistory || [])
-      .filter(msg => msg.role === 'user' && msg.content.includes('📎 Uploaded:'))
+      .filter(msg => msg.role === 'user' && (
+        msg.content.includes('📎 Uploaded:') || // Old format
+        msg.content.includes('📎') || // New format
+        msg.content.includes('User uploaded') // Alternative format
+      ))
       .map((msg, index) => {
-        const fileName = msg.content.replace('📎 Uploaded: ', '');
+        // Handle different file upload message formats
+        let fileName = '';
+        if (msg.content.includes('📎 Uploaded:')) {
+          fileName = msg.content.replace('📎 Uploaded: ', '');
+        } else if (msg.content.includes('📎')) {
+          // New format: "📎 filename.ext some message"
+          const match = msg.content.match(/📎\s*([^\s]+\.[a-zA-Z0-9]+)/);
+          fileName = match ? match[1] : 'unknown-file';
+        } else if (msg.content.includes('User uploaded')) {
+          // Alternative format: "User uploaded a STYLE REFERENCE: filename.ext"
+          const match = msg.content.match(/User uploaded.*?:\s*([^\s]+\.[a-zA-Z0-9]+)/);
+          fileName = match ? match[1] : 'unknown-file';
+        }
         
         // Find the actual file info from the same message (it should have both content and file)
         const fileInfo = msg.file;
