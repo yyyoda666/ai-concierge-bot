@@ -17,10 +17,28 @@ export default async function handler(req, res) {
     console.log('ANTHROPIC_API_KEY exists:', !!process.env.ANTHROPIC_API_KEY);
     
     const { conversationHistory, conversationId } = req.body;
+    
+    // Validate required fields
+    if (!conversationHistory || !Array.isArray(conversationHistory)) {
+      console.error('Missing or invalid conversationHistory:', conversationHistory);
+      return res.status(400).json({ 
+        error: 'Missing conversationHistory',
+        details: 'conversationHistory is required and must be an array' 
+      });
+    }
+    
+    if (!conversationId) {
+      console.error('Missing conversationId');
+      return res.status(400).json({ 
+        error: 'Missing conversationId',
+        details: 'conversationId is required' 
+      });
+    }
+    
     console.log('Conversation length:', conversationHistory?.length);
 
     // Extract any uploaded files from conversation and let AI categorize them
-    const uploadedFiles = conversationHistory
+    const uploadedFiles = (conversationHistory || [])
       .filter(msg => msg.role === 'user' && msg.content.includes('📎 Uploaded:'))
       .map((msg, index) => {
         const fileName = msg.content.replace('📎 Uploaded: ', '');
@@ -86,7 +104,7 @@ Use "Not provided" for missing contact info. Use "Unclear" for classification fi
 Be specific and detailed in projectBrief and conversationSummary.
 
 Conversation to analyze:
-${conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n')}`;
+${(conversationHistory || []).map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n')}`;
 
     console.log('Calling Anthropic for enhanced extraction with file categorization...');
     const extractionResponse = await anthropic.messages.create({
@@ -193,7 +211,9 @@ ${conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).jo
     };
 
     console.log('Sending RIGID JSON to Relay.app...');
-    console.log('Payload:', JSON.stringify(finalPayload, null, 2));
+    console.log('Webhook URL:', RELAY_WEBHOOK_URL);
+    console.log('Payload size:', JSON.stringify(finalPayload).length, 'characters');
+    console.log('Payload preview:', JSON.stringify(finalPayload, null, 2).substring(0, 500) + '...');
 
     // Send to Relay.app webhook
     const webhookResponse = await fetch(RELAY_WEBHOOK_URL, {
@@ -206,7 +226,8 @@ ${conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).jo
 
     const webhookResult = await webhookResponse.text();
     console.log('Webhook response status:', webhookResponse.status);
-    console.log('Webhook response:', webhookResult);
+    console.log('Webhook response headers:', Object.fromEntries(webhookResponse.headers.entries()));
+    console.log('Webhook response body:', webhookResult);
 
     if (!webhookResponse.ok) {
       console.error('WEBHOOK ERROR DETAILS:');
