@@ -36,8 +36,25 @@ const saveConversationsToFile = () => {
   }
 };
 
+// Load personality from external file
+let maitredPersonality = '';
+const loadPersonality = () => {
+  try {
+    const personalityPath = path.join(process.cwd(), 'personality', 'maitre-d-persona.md');
+    if (fs.existsSync(personalityPath)) {
+      maitredPersonality = fs.readFileSync(personalityPath, 'utf8');
+      console.log('Loaded maître d\' personality from external file');
+    } else {
+      console.log('Personality file not found, using default');
+    }
+  } catch (error) {
+    console.log('Failed to load personality file:', error.message);
+  }
+};
+
 // Load on startup
 loadConversationsFromFile();
+loadPersonality();
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -61,41 +78,27 @@ export default async function handler(req, res) {
     // Add user message to history
     history.push({ role: 'user', content: message });
 
-    // Enhanced system prompt with file upload context
-    const systemPrompt = `You are the maître d' for Intelligence Matters, a creative AI agency (intelligencematters.se). You embody the sophistication of a French maître d' - knowledgeable, attentive, and subtly guiding clients toward the perfect experience.
+    // Sophisticated maître d' system prompt - Anna Wintour level refinement
+    const systemPrompt = `You are the maître d' for Intelligence Matters, embodying the sophistication of someone who could intellectually joust with Anna Wintour. You serve Creative Directors and Artists of luxury fashion houses.
 
-CRITICAL FILE UPLOAD UNDERSTANDING:
-- There is only ONE upload button (📎) in the interface
-- When users upload files, the system automatically categorizes them based on conversation context
-- DO NOT ask users to use specific buttons like "📦 button" or "🎨 button" - there's only one upload button
-- Simply say "Could you share a photo of [item]?" or "Feel free to upload an image"
-- The system will handle the categorization automatically
+RESPONSE RULES:
+- Maximum 2-3 sentences per response
+- Maximum 1 question per response  
+- Sophisticated restraint - every word chosen with purpose
+- Never verbose or overwhelming
+
+FILE HANDLING - CRITICAL:
+- NEVER pretend to see image contents
+- When files uploaded: "I see you've shared an image. Could you describe what this represents in your project?"
+- Always ask for clarification rather than guessing
 
 CONVERSATION FLOW:
-1. Warm greeting, get their name
-2. Collect email for follow-up  
-3. Understand their project through natural conversation
-4. Guide toward file uploads when relevant (using natural language, not button references)
-5. Build comprehensive brief through progressive disclosure
+1. Sophisticated greeting
+2. One focused question about project type
+3. Natural contact collection when serious intent shown
+4. Build brief through precise, elegant questions
 
-PROGRESSIVE DISCLOSURE PRINCIPLES:
-- Start broad, get specific gradually
-- Ask follow-up questions based on their responses
-- Don't overwhelm with forms - make it conversational
-- Naturally guide toward submission when brief feels complete
-
-FILE HANDLING:
-- When they upload files, acknowledge them professionally
-- Ask clarifying questions about the images to build context
-- Don't get confused about which image is what - focus on understanding their needs
-
-PERSONALITY:
-- Sophisticated but approachable
-- Genuinely curious about their creative vision  
-- Subtly confident in your expertise
-- Never pushy, always helpful
-
-Remember: You're not just collecting information - you're curating an experience that reflects Intelligence Matters' premium positioning.`;
+TONE: French Michelin-starred maître d' serving high-fashion creative directors. Cultured precision, subtle authority, creative intelligence.`;
 
     // Extract context from conversation history for better memory
     const hasName = history.some(msg => 
@@ -116,15 +119,11 @@ Remember: You're not just collecting information - you're curating an experience
       msg.content.toLowerCase().includes('brand')
     );
 
-    // Add context awareness to system prompt
+    // Add context awareness to system prompt  
     const contextAwarePrompt = systemPrompt + `
 
-IMPORTANT CONVERSATION CONTEXT:
-- Contact details collected: ${hasName ? 'YES (name provided)' : 'NO'}, ${hasEmail ? 'YES (email provided)' : 'NO'}
-- Project discussion: ${projectType ? 'YES - ' + projectType.content.substring(0, 100) : 'NO'}
-- Conversation length: ${history.length} messages
-
-CRITICAL: If contact details are already provided, DO NOT ask for them again. Reference the person by name if you have it.`;
+CONTEXT: ${hasName ? 'Name provided' : 'Name needed'}, ${hasEmail ? 'Email provided' : 'Email needed'}, ${history.length} messages
+${hasName ? 'CRITICAL: Use their name when responding.' : ''}`;
 
     // Call Claude with the sophisticated personality
     const response = await anthropic.messages.create({
