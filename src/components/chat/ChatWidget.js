@@ -17,8 +17,8 @@ export default function ChatWidget() {
   const fileInputRef = useRef(null);
 
   // Auto-submit configuration
-  const AUTO_SUBMIT_DELAY = 5 * 60 * 1000; // 5 minutes in milliseconds (was incorrectly 60 seconds)
-  const WARNING_TIME = 60 * 1000; // Show warning 1 minute before auto-submit
+  const AUTO_SUBMIT_DELAY = 4 * 60 * 1000; // 4 minutes total (2 min silent + 2 min countdown)
+  const WARNING_TIME = 2 * 60 * 1000; // Show 2-minute countdown after 2 minutes of silence
 
   // Communicate height changes to parent iframe
   useEffect(() => {
@@ -178,14 +178,14 @@ Return ONLY this JSON:
 
     // Only set new timer if conversation is ready for auto-submit
     if (isConversationReadyForAutoSubmit()) {
-      console.log('Setting auto-submit timer for 5 minutes...');
+      console.log('Setting auto-submit timer: 2 minutes silent, then 2-minute countdown...');
       
-      // Warning timer (4 minutes)
+      // Warning timer (after 2 minutes of silence)
       const warningTimer = setTimeout(() => {
-        setTimeUntilAutoSubmit(60); // Show 60 second countdown
+        setTimeUntilAutoSubmit(120); // Show 120 second countdown (2 minutes)
         
         // Countdown timer
-        let secondsLeft = 60;
+        let secondsLeft = 120; // Start 2-minute countdown
         const countdownTimer = setInterval(() => {
           secondsLeft--;
           setTimeUntilAutoSubmit(secondsLeft);
@@ -224,7 +224,7 @@ Return ONLY this JSON:
       // Add auto-submit flag to the conversation
       conversationHistory.push({
         role: 'system',
-        content: 'AUTO_SUBMIT: Brief automatically submitted due to user inactivity after 5 minutes'
+        content: 'AUTO_SUBMIT: Brief automatically submitted due to user inactivity after 4 minutes (2 min silent + 2 min countdown)'
       });
 
       const response = await fetch('/api/submit-brief', {

@@ -192,8 +192,9 @@ CONVERSATION STATE: ${JSON.stringify(conversationState)}
 ${conversationState.hasName ? `CRITICAL: Use ${conversationState.extractedName || 'their name'} when responding - do NOT ask for their name again.` : 'CRITICAL: Ask for their name naturally when appropriate.'}
 
 SUBMIT BUTTON INSTRUCTION:
-- When conversation has sufficient project details AND contact info, mention: "I can see you have a great project brief coming together. You can press the 'Submit Brief' button when you're ready, or we can continue refining the details."
-- Only mention the submit button once per conversation when appropriate`;
+- When conversation has sufficient project details AND contact info, regularly remind users: "Feel free to ask any follow-up questions, or press the 'Submit Brief' button if you feel ready to proceed."
+- Keep this natural and friendly - don't make it feel pushy
+- Vary the phrasing: "Any other questions, or ready to submit?" / "What else would you like to know, or shall we submit your brief?" / "Happy to discuss more details, or you can submit when ready."`;
 
     // Call Claude with the sophisticated personality
     const response = await anthropic.messages.create({
