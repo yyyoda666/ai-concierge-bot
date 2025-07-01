@@ -643,23 +643,18 @@ Return ONLY this JSON:
 
       <style jsx>{`
         .chat-widget {
-          position: fixed;
-          bottom: 20px;
-          right: 20px;
-          width: ${isExpanded ? '380px' : 'auto'};
-          height: ${isExpanded ? '500px' : 'auto'};
+          position: relative;
+          width: 100%;
+          max-width: 100%;
+          height: ${isExpanded ? '500px' : '60px'};
           background: white;
           border-radius: ${isExpanded ? '16px' : '28px'};
-          box-shadow: ${isExpanded ? '0 16px 64px rgba(0, 0, 0, 0.12)' : '0 8px 32px rgba(0, 0, 0, 0.12)'};
-          z-index: 1000;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           overflow: hidden;
-          backdrop-filter: blur(20px);
           border: 1px solid rgba(0, 0, 0, 0.08);
-        }
-        .chat-widget:hover {
-          box-shadow: ${isExpanded ? '0 20px 80px rgba(0, 0, 0, 0.15)' : '0 12px 40px rgba(0, 0, 0, 0.15)'};
+          display: flex;
+          flex-direction: column;
         }
         .chat-header {
           padding: ${isExpanded ? '20px 24px 16px' : '0'};
@@ -667,8 +662,7 @@ Return ONLY this JSON:
           display: ${isExpanded ? 'flex' : 'none'};
           justify-content: space-between;
           align-items: center;
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(20px);
+          background: white;
         }
         .chat-title {
           font-size: 16px;
@@ -807,8 +801,7 @@ Return ONLY this JSON:
           border-top: ${isExpanded ? '1px solid rgba(0, 0, 0, 0.08)' : 'none'};
           display: flex;
           gap: 12px;
-          background: ${isExpanded ? 'rgba(255, 255, 255, 0.95)' : 'transparent'};
-          backdrop-filter: blur(20px);
+          background: ${isExpanded ? 'white' : 'transparent'};
         }
         .chat-input input {
           flex: 1;
@@ -818,7 +811,6 @@ Return ONLY this JSON:
           outline: none;
           font-size: ${isExpanded ? '15px' : '16px'};
           background: white;
-          box-shadow: ${isExpanded ? 'inset 0 1px 2px rgba(0, 0, 0, 0.04)' : '0 4px 16px rgba(0, 0, 0, 0.1)'};
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
           font-family: inherit;
           letter-spacing: -0.01em;
@@ -830,7 +822,6 @@ Return ONLY this JSON:
         }
         .chat-input input:focus {
           border-color: rgba(0, 0, 0, 0.3);
-          box-shadow: ${isExpanded ? '0 0 0 3px rgba(0, 0, 0, 0.06)' : '0 6px 24px rgba(0, 0, 0, 0.15)'};
         }
         .chat-input button {
           padding: ${isExpanded ? '14px 18px' : '16px 20px'};
@@ -858,8 +849,7 @@ Return ONLY this JSON:
         .chat-actions {
           padding: 16px 24px 20px;
           border-top: 1px solid rgba(0, 0, 0, 0.08);
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(20px);
+          background: white;
         }
         .submit-brief-btn {
           width: 100%;
@@ -896,7 +886,6 @@ Return ONLY this JSON:
           animation: warningPulse 2s infinite;
           border-radius: 12px;
           margin-bottom: 12px;
-          backdrop-filter: blur(20px);
         }
         .cancel-auto-submit {
           background: rgba(108, 117, 125, 0.9);
