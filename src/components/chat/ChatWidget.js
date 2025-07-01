@@ -1,19 +1,74 @@
 import { useState, useRef, useEffect } from 'react';
 
+// Typewriter Text Component
+const TypewriterText = ({ text, speed = 30, onComplete }) => {
+  const [displayedText, setDisplayedText] = useState('');
+  const [isTyping, setIsTyping] = useState(true);
+  const timeoutRef = useRef(null);
+
+  useEffect(() => {
+    if (text) {
+      setDisplayedText('');
+      setIsTyping(true);
+      
+      let currentIndex = 0;
+      const typeNextCharacter = () => {
+        if (currentIndex < text.length) {
+          setDisplayedText(text.slice(0, currentIndex + 1));
+          currentIndex++;
+          
+          // Variable speed based on punctuation
+          let delay = speed;
+          const char = text[currentIndex - 1];
+          if (char === '.' || char === '!' || char === '?') {
+            delay = speed * 3; // Pause after sentences
+          } else if (char === ',' || char === ';') {
+            delay = speed * 2; // Pause after commas
+          } else if (char === ' ') {
+            delay = speed * 0.5; // Faster through spaces
+          }
+          
+          timeoutRef.current = setTimeout(typeNextCharacter, delay);
+        } else {
+          setIsTyping(false);
+          if (onComplete) onComplete();
+        }
+      };
+      
+      typeNextCharacter();
+    }
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [text, speed, onComplete]);
+
+  return (
+    <span>
+      {displayedText}
+      {isTyping && <span className="typing-cursor">|</span>}
+    </span>
+  );
+};
+
 export default function ChatWidget() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [conversationId] = useState(() => 'conv_' + Date.now());
+  const [conversationId] = useState(() => 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
   const [showSubmitMode, setShowSubmitMode] = useState(false);
   const [autoSubmitTimer, setAutoSubmitTimer] = useState(null);
   const [timeUntilAutoSubmit, setTimeUntilAutoSubmit] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [hasAutoSubmitted, setHasAutoSubmitted] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [stagedFile, setStagedFile] = useState(null); // New state for staged file
+  const [stagedFile, setStagedFile] = useState(null);
+  const [typingMessageId, setTypingMessageId] = useState(null); // Track which message is typing
 
+  const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
   // Auto-submit configuration
@@ -338,72 +393,85 @@ Return ONLY this JSON:
 
   const sendMessage = async () => {
     if (!input.trim() && !stagedFile) return;
-
+    
     // Expand the widget on first interaction
     if (!isExpanded) {
       setIsExpanded(true);
     }
-
-    // Cancel any pending auto-submit when user becomes active
+    
+    // Cancel auto-submit when user is active
     cancelAutoSubmit();
-
+    
     const userMessage = input.trim();
-    const messageWithFile = stagedFile; // Capture staged file before clearing
+    const messageId = Date.now() + Math.random().toString(36).substr(2, 9);
     
-    setInput('');
-    setStagedFile(null); // Clear staged file
-    
-    // Add user message with optional file attachment
-    const userMessageObj = { 
+    // Add user message
+    const newUserMessage = { 
+      id: messageId,
       type: 'user', 
-      content: userMessage || `📎 ${messageWithFile.originalName}`,
-      ...(messageWithFile && { file: messageWithFile })
+      content: userMessage || '📎 File attached',
+      ...(stagedFile && { file: stagedFile })
     };
     
-    setMessages(prev => [...prev, userMessageObj]);
+    setMessages(prev => [...prev, newUserMessage]);
+    setInput('');
+    setStagedFile(null);
     setIsLoading(true);
-
+    
     try {
+      const requestBody = {
+        message: userMessage,
+        conversationId,
+        ...(stagedFile && { fileInfo: stagedFile })
+      };
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: userMessage || `User uploaded an image: ${messageWithFile.originalName}`,
-          conversationId: conversationId,
-          ...(messageWithFile && { fileInfo: messageWithFile })
-        })
+        body: JSON.stringify(requestBody)
       });
 
       const data = await response.json();
       
-      // Check if AI triggered READY_TO_SUBMIT
-      const aiTriggeredSubmit = data.response.includes('READY_TO_SUBMIT');
-      
-      // Clean the response by removing READY_TO_SUBMIT if present
-      const cleanResponse = data.response.replace(/READY_TO_SUBMIT\s*/g, '').trim();
-      
-      setMessages(prev => [...prev, { type: 'bot', content: cleanResponse }]);
-      
-      // Show submit mode if AI triggered it or fallback to old logic
-      if (aiTriggeredSubmit) {
-        setShowSubmitMode(true);
+      if (data.response) {
+        const botMessageId = Date.now() + Math.random().toString(36).substr(2, 9);
+        
+        // Check if AI triggered READY_TO_SUBMIT
+        const aiTriggeredSubmit = data.response.includes('READY_TO_SUBMIT');
+        
+        // Clean the response by removing READY_TO_SUBMIT if present
+        const cleanResponse = data.response.replace(/READY_TO_SUBMIT\s*/g, '').trim();
+        
+        // Add bot message with typewriter animation
+        setMessages(prev => [...prev, { 
+          id: botMessageId,
+          type: 'bot', 
+          content: '', // Start empty for typing animation
+          fullContent: cleanResponse, // Full content to type out
+          isTyping: true
+        }]);
+        
+        setTypingMessageId(botMessageId);
+        setIsLoading(false);
+        
+        // Show submit mode if AI triggered it
+        if (aiTriggeredSubmit) {
+          // Delay showing submit button until typing is complete
+          setTimeout(() => setShowSubmitMode(true), cleanResponse.length * 30 + 500);
+        }
+        
       } else {
-        // Fallback logic - use LLM analysis for better accuracy
-        analyzeConversationState().then(state => {
-          if (state.readyForSubmission || (messages.length >= 6 && state.hasEmail && state.hasProjectDetails)) {
-            setShowSubmitMode(true);
-          }
-        });
+        throw new Error('No response received');
       }
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error sending message:', error);
       setMessages(prev => [...prev, { 
+        id: Date.now(),
         type: 'bot', 
-        content: 'Sorry, I encountered an error. Please try again.' 
+        content: 'Sorry, I encountered an error. Please try again.'
       }]);
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   const handleKeyPress = (e) => {
@@ -479,9 +547,23 @@ Return ONLY this JSON:
       
       <div className="chat-messages">
         {messages.map((msg, idx) => (
-          <div key={idx} className={`message ${msg.type}`}>
+          <div key={msg.id || idx} className={`message ${msg.type}`}>
             <div className="message-content">
-              {msg.content}
+              {msg.type === 'bot' && msg.isTyping && msg.fullContent ? (
+                <TypewriterText 
+                  text={msg.fullContent}
+                  speed={25}
+                  onComplete={() => {
+                    // Update the message to show it's finished typing
+                    setMessages(prev => prev.map(m => 
+                      m.id === msg.id ? { ...m, content: msg.fullContent, isTyping: false } : m
+                    ));
+                    setTypingMessageId(null);
+                  }}
+                />
+              ) : (
+                msg.content
+              )}
               {msg.file && (
                 <div className={`file-attachment ${msg.file.uploadType || ''}`}>
                   <img src={msg.file.url} alt={msg.file.originalName} className="uploaded-image" />
@@ -493,8 +575,10 @@ Return ONLY this JSON:
         ))}
         {isLoading && (
           <div className="message bot">
-            <div className="message-content">
-              <div className="typing-indicator">...</div>
+            <div className="typing-indicator">
+              <div className="typing-dot"></div>
+              <div className="typing-dot"></div>
+              <div className="typing-dot"></div>
             </div>
           </div>
         )}
@@ -559,147 +643,279 @@ Return ONLY this JSON:
 
       <style jsx>{`
         .chat-widget {
-          width: 100%;
-          max-width: 100%;
-          height: ${isExpanded ? '500px' : '60px'};
-          min-height: ${isExpanded ? '500px' : '60px'};
-          border: ${isExpanded ? '1px solid #ddd' : 'none'};
-          border-radius: ${isExpanded ? '12px' : '0'};
-          display: flex;
-          flex-direction: column;
-          background: ${isExpanded ? 'white' : 'transparent'};
-          box-shadow: ${isExpanded ? '0 4px 20px rgba(0,0,0,0.1)' : 'none'};
-          transition: all 0.3s ease-in-out;
+          position: fixed;
+          bottom: 20px;
+          right: 20px;
+          width: ${isExpanded ? '380px' : 'auto'};
+          height: ${isExpanded ? '500px' : 'auto'};
+          background: white;
+          border-radius: ${isExpanded ? '16px' : '28px'};
+          box-shadow: ${isExpanded ? '0 16px 64px rgba(0, 0, 0, 0.12)' : '0 8px 32px rgba(0, 0, 0, 0.12)'};
+          z-index: 1000;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           overflow: hidden;
-          position: relative;
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(0, 0, 0, 0.08);
         }
-
+        .chat-widget:hover {
+          box-shadow: ${isExpanded ? '0 20px 80px rgba(0, 0, 0, 0.15)' : '0 12px 40px rgba(0, 0, 0, 0.15)'};
+        }
+        .chat-header {
+          padding: ${isExpanded ? '20px 24px 16px' : '0'};
+          border-bottom: ${isExpanded ? '1px solid rgba(0, 0, 0, 0.08)' : 'none'};
+          display: ${isExpanded ? 'flex' : 'none'};
+          justify-content: space-between;
+          align-items: center;
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(20px);
+        }
+        .chat-title {
+          font-size: 16px;
+          font-weight: 600;
+          color: #000;
+          letter-spacing: -0.01em;
+          margin: 0;
+        }
+        .chat-subtitle {
+          font-size: 13px;
+          color: rgba(0, 0, 0, 0.6);
+          margin: 2px 0 0 0;
+          font-weight: 400;
+        }
+        .close-btn {
+          background: none;
+          border: none;
+          font-size: 20px;
+          cursor: pointer;
+          color: rgba(0, 0, 0, 0.5);
+          padding: 4px;
+          border-radius: 8px;
+          transition: all 0.2s ease;
+          width: 32px;
+          height: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .close-btn:hover {
+          background: rgba(0, 0, 0, 0.05);
+          color: rgba(0, 0, 0, 0.8);
+        }
         .chat-messages {
           flex: 1;
           overflow-y: auto;
-          padding: ${isExpanded ? '16px' : '0'};
+          padding: ${isExpanded ? '16px 0' : '0'};
           display: ${isExpanded ? 'flex' : 'none'};
           flex-direction: column;
-          gap: 12px;
-          min-height: 0;
+          gap: 16px;
+          background: white;
+        }
+        .chat-messages::-webkit-scrollbar {
+          width: 4px;
+        }
+        .chat-messages::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .chat-messages::-webkit-scrollbar-thumb {
+          background: rgba(0, 0, 0, 0.1);
+          border-radius: 2px;
         }
         .message {
           display: flex;
+          margin: 0 20px;
+          max-width: 85%;
+          animation: messageSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        @keyframes messageSlideIn {
+          from { 
+            opacity: 0; 
+            transform: translateY(12px); 
+          }
+          to { 
+            opacity: 1; 
+            transform: translateY(0); 
+          }
         }
         .message.user {
+          align-self: flex-end;
           justify-content: flex-end;
         }
         .message.bot {
+          align-self: flex-start;
           justify-content: flex-start;
         }
         .message-content {
-          max-width: 80%;
-          padding: 8px 12px;
-          border-radius: 16px;
-          font-size: 14px;
-          line-height: 1.4;
+          padding: 14px 18px;
+          border-radius: 18px;
+          font-size: 15px;
+          line-height: 1.5;
+          letter-spacing: -0.01em;
+          word-wrap: break-word;
+          position: relative;
         }
         .message.user .message-content {
           background: #000;
           color: white;
+          border-bottom-right-radius: 6px;
         }
         .message.bot .message-content {
-          background: #f0f0f0;
-          color: #333;
+          background: rgba(0, 0, 0, 0.04);
+          color: rgba(0, 0, 0, 0.9);
+          border-bottom-left-radius: 6px;
+          border: 1px solid rgba(0, 0, 0, 0.06);
         }
         .typing-indicator {
-          animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-        .chat-input {
-          padding: ${isExpanded ? '16px' : '0'};
-          border-top: ${isExpanded ? '1px solid #eee' : 'none'};
           display: flex;
-          gap: 8px;
-          background: ${isExpanded ? 'white' : 'transparent'};
+          padding: 14px 18px;
+          background: rgba(0, 0, 0, 0.04);
+          border: 1px solid rgba(0, 0, 0, 0.06);
+          border-radius: 18px;
+          border-bottom-left-radius: 6px;
+          align-items: center;
+          gap: 4px;
+          animation: messageSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .typing-dot {
+          width: 6px;
+          height: 6px;
+          background: rgba(0, 0, 0, 0.4);
+          border-radius: 50%;
+          animation: typingPulse 1.4s infinite ease-in-out;
+        }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+                 @keyframes typingPulse {
+           0%, 60%, 100% { opacity: 0.3; }
+           30% { opacity: 1; }
+         }
+         .typing-cursor {
+           display: inline-block;
+           width: 2px;
+           height: 1.2em;
+           background: rgba(0, 0, 0, 0.7);
+           margin-left: 2px;
+           animation: cursorBlink 1s infinite;
+           vertical-align: text-bottom;
+         }
+         @keyframes cursorBlink {
+           0%, 50% { opacity: 1; }
+           51%, 100% { opacity: 0; }
+         }
+        .chat-input {
+          padding: ${isExpanded ? '20px 24px 24px' : '0'};
+          border-top: ${isExpanded ? '1px solid rgba(0, 0, 0, 0.08)' : 'none'};
+          display: flex;
+          gap: 12px;
+          background: ${isExpanded ? 'rgba(255, 255, 255, 0.95)' : 'transparent'};
+          backdrop-filter: blur(20px);
         }
         .chat-input input {
           flex: 1;
-          padding: ${isExpanded ? '12px 16px' : '16px 20px'};
-          border: 1px solid #ddd;
-          border-radius: ${isExpanded ? '12px' : '25px'};
+          padding: ${isExpanded ? '14px 18px' : '16px 20px'};
+          border: ${isExpanded ? '1px solid rgba(0, 0, 0, 0.12)' : '1px solid rgba(0, 0, 0, 0.08)'};
+          border-radius: ${isExpanded ? '12px' : '28px'};
           outline: none;
-          font-size: ${isExpanded ? '14px' : '16px'};
+          font-size: ${isExpanded ? '15px' : '16px'};
           background: white;
-          box-shadow: ${isExpanded ? 'none' : '0 2px 10px rgba(0,0,0,0.1)'};
-          transition: all 0.2s ease;
+          box-shadow: ${isExpanded ? 'inset 0 1px 2px rgba(0, 0, 0, 0.04)' : '0 4px 16px rgba(0, 0, 0, 0.1)'};
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          font-family: inherit;
+          letter-spacing: -0.01em;
+          color: rgba(0, 0, 0, 0.9);
+        }
+        .chat-input input::placeholder {
+          color: rgba(0, 0, 0, 0.4);
+          font-weight: 400;
         }
         .chat-input input:focus {
-          border-color: #000;
-          box-shadow: ${isExpanded ? '0 0 0 2px rgba(0,0,0,0.1)' : '0 2px 15px rgba(0,0,0,0.15)'};
+          border-color: rgba(0, 0, 0, 0.3);
+          box-shadow: ${isExpanded ? '0 0 0 3px rgba(0, 0, 0, 0.06)' : '0 6px 24px rgba(0, 0, 0, 0.15)'};
         }
         .chat-input button {
-          padding: ${isExpanded ? '12px 16px' : '16px 20px'};
+          padding: ${isExpanded ? '14px 18px' : '16px 20px'};
           background: #000;
           color: white;
           border: none;
-          border-radius: ${isExpanded ? '12px' : '25px'};
+          border-radius: ${isExpanded ? '12px' : '28px'};
           cursor: pointer;
-          font-size: ${isExpanded ? '14px' : '16px'};
-          min-width: ${isExpanded ? 'auto' : '60px'};
-          transition: all 0.2s ease;
+          font-size: ${isExpanded ? '15px' : '16px'};
+          min-width: ${isExpanded ? 'auto' : '56px'};
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          font-weight: 500;
+          font-family: inherit;
+          letter-spacing: -0.01em;
+        }
+        .chat-input button:hover:not(:disabled) {
+          background: rgba(0, 0, 0, 0.8);
+          transform: translateY(-1px);
         }
         .chat-input button:disabled {
-          opacity: 0.5;
+          opacity: 0.4;
           cursor: not-allowed;
+          transform: none;
         }
         .chat-actions {
-          padding: 12px 16px;
-          border-top: 1px solid #eee;
-          background: #f9f9f9;
+          padding: 16px 24px 20px;
+          border-top: 1px solid rgba(0, 0, 0, 0.08);
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(20px);
         }
         .submit-brief-btn {
           width: 100%;
-          padding: 10px 16px;
-          background: #007bff;
+          padding: 14px 18px;
+          background: #000;
           color: white;
           border: none;
-          border-radius: 6px;
+          border-radius: 12px;
           cursor: pointer;
-          font-size: 14px;
+          font-size: 15px;
           font-weight: 500;
+          font-family: inherit;
+          letter-spacing: -0.01em;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .submit-brief-btn:hover:not(:disabled) {
-          background: #0056b3;
+          background: rgba(0, 0, 0, 0.8);
+          transform: translateY(-1px);
         }
         .submit-brief-btn:disabled {
-          opacity: 0.5;
+          opacity: 0.4;
           cursor: not-allowed;
+          transform: none;
         }
         .auto-submit-warning {
-          background: #fff3cd;
-          border: 1px solid #ffeaa7;
-          color: #856404;
-          padding: 12px 16px;
-          font-size: 13px;
+          background: rgba(255, 243, 205, 0.8);
+          border: 1px solid rgba(255, 234, 167, 0.6);
+          color: rgba(133, 100, 4, 0.9);
+          padding: 14px 18px;
+          font-size: 14px;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          animation: pulse-warning 1s infinite;
+          animation: warningPulse 2s infinite;
+          border-radius: 12px;
+          margin-bottom: 12px;
+          backdrop-filter: blur(20px);
         }
         .cancel-auto-submit {
-          background: #6c757d;
+          background: rgba(108, 117, 125, 0.9);
           color: white;
           border: none;
-          padding: 4px 8px;
-          border-radius: 4px;
-          font-size: 11px;
+          padding: 6px 12px;
+          border-radius: 8px;
+          font-size: 12px;
           cursor: pointer;
+          font-weight: 500;
+          transition: all 0.2s ease;
         }
         .cancel-auto-submit:hover {
-          background: #545b62;
+          background: rgba(84, 91, 98, 0.9);
+          transform: translateY(-1px);
         }
-        @keyframes pulse-warning {
-          0%, 100% { background-color: #fff3cd; }
-          50% { background-color: #ffeaa7; }
+        @keyframes warningPulse {
+          0%, 100% { background-color: rgba(255, 243, 205, 0.8); }
+          50% { background-color: rgba(255, 234, 167, 0.9); }
         }
         .file-upload-btn {
           padding: 8px 12px;
