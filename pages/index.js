@@ -1,4 +1,4 @@
-import ChatWidget from '../components/ChatWidget';
+import ChatWidget from '../src/components/chat/ChatWidget';
 
 export default function Home() {
   return (

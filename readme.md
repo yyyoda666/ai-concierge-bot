@@ -1,87 +1,151 @@
 # AI Chat Interface
 
-An intelligent chat interface built with Next.js and Claude AI that replaces traditional contact forms with conversational lead generation.
+A sophisticated AI-powered lead generation system that replaces traditional contact forms with an intelligent conversational experience. Built for creative agencies and service providers.
 
-## Features
+## What This Does
 
-- 🤖 **AI-Powered Conversations** - Natural language processing for qualifying leads
-- 📁 **File Upload Support** - Image upload with categorization
-- 🔄 **Progressive Disclosure** - Builds comprehensive project briefs through conversation
-- 📊 **Structured Data Export** - Converts conversations to structured JSON
-- 🎯 **Smart Contact Collection** - Intelligent timing for collecting contact information
-- 🔗 **Webhook Integration** - Sends lead data to external automation systems
+Transforms website visitors into qualified prospects through natural conversation with a sophisticated AI personality refined enough to serve high-end creative professionals. Think luxury service-level refinement applied to creative project consultation.
+
+## Key Features
+
+### 🎭 **Sophisticated AI Personality**
+- **High-end sophistication** - Refined enough for luxury Creative Directors
+- **External personality configuration** - Safe editing without touching code
+- **Cultured precision** - Maximum 2-3 sentences, 1 question per response
+- **Intelligent image analysis** - AI can actually "see" and describe uploaded images
+
+### 📁 **Intelligent File Processing** 
+- **Smart file categorization** - AI automatically categorizes uploads as "product" vs "reference" images
+- **Rich file metadata** - Size, type, reasoning for categorization
+- **Multiple URL formats** - Compatible with various automation systems
+- **Staged upload system** - Modern UX allowing context addition before sending
+
+### 🔄 **Progressive Lead Generation**
+- **Natural conversation flow** - No forms, just sophisticated dialogue
+- **Smart contact collection** - Intelligent timing based on engagement level
+- **Enhanced project briefing** - Builds comprehensive specifications through conversation
+- **Context-aware responses** - Remembers conversation history and adapts accordingly
+
+### 📊 **Automation-Ready Output**
+- **Rigid JSON structure** - 16 consistent fields for reliable automation
+- **Webhook integration** - Direct integration with automation workflows
+- **Rich lead data** - Contact info, project details, file categorization, engagement analysis
+- **Auto-submit capabilities** - Captures leads even when users leave abruptly
 
 ## Tech Stack
 
-- **Frontend:** React/Next.js
-- **AI:** Claude 3.5 Sonnet (Anthropic)
-- **File Storage:** Vercel Blob
-- **Deployment:** Vercel
+- **Frontend:** React/Next.js with sophisticated chat UI
+- **AI:** Claude 3.5 Sonnet with custom personality and vision capabilities
+- **File Storage:** Vercel Blob with intelligent categorization
+- **Automation:** Webhook integration for external systems
+- **Deployment:** Vercel with auto-deployment pipeline
+
+## Project Status: Production Ready ✅
+
+**Current Capabilities:**
+- ✅ **End-to-end file upload system** - Files properly included in automation pipeline
+- ✅ **Sophisticated AI personality** - Luxury-level refinement implemented
+- ✅ **Image vision capability** - AI can actually analyze uploaded images
+- ✅ **Auto-submit functionality** - Captures leads on idle/browser close
+- ✅ **Session audit logging** - Prevents missed leads
+- ✅ **Production deployment** - Live system handling real prospects
+- ✅ **External configuration** - Safe editing without code changes
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ 
-- Anthropic API key
-- Webhook endpoint for lead data (optional)
+- Node.js 18+
+- Anthropic API key ([console.anthropic.com](https://console.anthropic.com))
+- Webhook URL (optional, for automation)
 
-### Installation
+### Quick Setup
 
-1. **Clone the repository:**
+1. **Clone and install:**
    ```bash
-   git clone https://github.com/yyyoda666/intelligence-matters-chat.git
-   cd intelligence-matters-chat
-   ```
-
-2. **Install dependencies:**
-   ```bash
+   git clone [repository-url]
+   cd ai-chat-interface
    npm install
    ```
 
-3. **Set up environment variables:**
-   Create a `.env.local` file:
+2. **Configure environment:**
+   Create `.env.local`:
    ```bash
-   # Required: Claude AI API key
-   ANTHROPIC_API_KEY=your_anthropic_api_key_here
+   # Required
+   ANTHROPIC_API_KEY=your_key_here
    
-   # Optional: Webhook URL for lead data
+   # Optional (for automation)
    RELAY_WEBHOOK_URL=your_webhook_url_here
+   CONTACT_EMAIL=your_contact@example.com
    ```
 
-4. **Run development server:**
+3. **Run development:**
    ```bash
    npm run dev
+   # Visit http://localhost:3001
    ```
-
-5. **Open in browser:**
-   Visit `http://localhost:3001`
 
 ## Usage
 
-### Main Interface
-- Main test page: `http://localhost:3001`
-- Clean embed view: `http://localhost:3001/embed`
+### Testing the System
+- **Main interface:** `http://localhost:3001`
+- **Embed view:** `http://localhost:3001/embed`
+- **Upload files, have a conversation, submit brief**
+- **Check logs for complete pipeline verification**
 
-### Embedding the Chat Widget
+### Personality Customization
+
+Edit the AI personality safely without touching code:
+```
+personality/maitre-d-persona.md
+```
+
+### Company Context
+
+Configure your company's services and information:
+```
+company-context.md
+```
+
+**Safe editing features:**
+- No risk of breaking functionality
+- Version controlled changes
+- Instant deployment of updates
+
+### Embedding in Websites
 
 ```jsx
 import ChatWidget from './components/ChatWidget';
 
-function MyPage() {
+function ContactPage() {
   return (
-    <div>
+    <div className="contact-section">
       <ChatWidget />
     </div>
   );
 }
 ```
 
-## API Endpoints
+## Architecture
 
-- `/api/chat` - Handles AI conversation
-- `/api/submit-brief` - Processes and exports lead data
-- `/api/upload` - Handles file uploads
+### API Endpoints
+- `/api/chat` - Sophisticated AI conversation with vision capabilities
+- `/api/submit-brief` - AI extraction + structured JSON + webhook delivery  
+- `/api/upload` - File upload with categorization support
+- `/api/session-audit` - Session tracking and lead capture monitoring
+
+### Data Flow
+```
+User Upload → Blob Storage → AI Analysis → Lead Extraction → Webhook → Automation
+```
+
+### Lead Data Structure
+16-field consistent JSON including:
+- Contact information (name, email, company, title)
+- Project classification (request type, service category, readiness level)
+- Rich project details (brief, inspiration, technical specs, deliverables)
+- File categorization (product images vs style references with URLs)
+- Conversation analysis (engagement level, next steps, missing info)
 
 ## Configuration
 
@@ -89,37 +153,63 @@ function MyPage() {
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ANTHROPIC_API_KEY` | Yes | Claude AI API key from Anthropic |
-| `RELAY_WEBHOOK_URL` | No | Webhook endpoint for lead data |
-| `BLOB_READ_WRITE_TOKEN` | Auto | Vercel Blob storage token |
+| `ANTHROPIC_API_KEY` | Yes | Claude AI API key |
+| `RELAY_WEBHOOK_URL` | No | Automation webhook endpoint |
+| `CONTACT_EMAIL` | No | Contact email for follow-up instructions |
+| `BLOB_READ_WRITE_TOKEN` | Auto | Vercel Blob storage |
 
-### Customization
+### Configuration Files
 
-The AI personality and conversation flow can be customized in:
-- `pages/api/chat.js` - Main conversation logic
-- `pages/api/submit-brief.js` - Lead data processing
+**Personality:** `personality/maitre-d-persona.md`
+**Company Context:** `company-context.md`
+
+**Benefits:** 
+- Safe editing without code risk
+- Version controlled changes
+- Sophisticated conversation capabilities
 
 ## Deployment
 
-This project is optimized for Vercel deployment:
+**Vercel Auto-Deployment:**
+1. Connect repository to Vercel
+2. Set environment variables in dashboard
+3. Automatic deployment on git push
+4. Production URL with custom domain support
 
-1. **Connect to Vercel:**
-   ```bash
-   npm i -g vercel
-   vercel
-   ```
+**Security Features:**
+- Environment variable protection
+- Webhook URL security
+- File upload validation
+- API rate limiting
 
-2. **Set environment variables in Vercel dashboard**
-3. **Deploy automatically on git push**
+## Recent Features
 
-## Contributing
+### Auto-Submit & Browser Close Detection
+- ✅ **Idle detection** - Auto-submits after 60 seconds of inactivity
+- ✅ **Browser close detection** - Captures leads even when users leave abruptly
+- ✅ **Session audit logging** - Comprehensive tracking to prevent missed leads
+- ✅ **Beacon API** - Reliable data transmission even during page unload
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+### Image Vision Capability
+- ✅ **AI image analysis** - Claude can actually "see" and describe uploaded images
+- ✅ **Context-aware responses** - AI references specific visual elements
+- ✅ **Smart categorization** - Distinguishes product images from style references
+- ✅ **Enhanced conversations** - More natural dialogue about visual content
+
+### Enhanced Context System
+- ✅ **External company context** - Business information separate from code
+- ✅ **Configurable personality** - Easy customization without technical risk
+- ✅ **Intelligent responses** - AI understands company services and capabilities
+- ✅ **Future-ready** - Can be enhanced with website scraping and dynamic updates
+
+## Business Value
+
+**Higher Quality Leads:** Sophisticated conversation vs contact forms
+**Automated Workflow:** Structured data flows directly to operations  
+**Premium Positioning:** AI experience reflects agency sophistication
+**Enhanced Project Briefs:** Rich context for accurate scoping
+**Zero Lead Loss:** Auto-submit prevents missed opportunities
 
 ## License
 
-This project is private and proprietary. 
+Generic AI chat interface for creative service providers. 

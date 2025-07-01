@@ -1,4 +1,4 @@
-import ChatWidget from '../components/ChatWidget';
+import ChatWidget from '../src/components/chat/ChatWidget';
 import { useEffect } from 'react';
 
 export default function EmbedPage() {

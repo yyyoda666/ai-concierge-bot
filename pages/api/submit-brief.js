@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { put } from '@vercel/blob';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -13,14 +14,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log('=== SUBMIT BRIEF DEBUG ===');
-    console.log('ANTHROPIC_API_KEY exists:', !!process.env.ANTHROPIC_API_KEY);
-    
     const { conversationHistory, conversationId } = req.body;
     
     // Validate required fields
     if (!conversationHistory || !Array.isArray(conversationHistory)) {
-      console.error('Missing or invalid conversationHistory:', conversationHistory);
+      console.error('Missing or invalid conversationHistory');
       return res.status(400).json({ 
         error: 'Missing conversationHistory',
         details: 'conversationHistory is required and must be an array' 
@@ -34,21 +32,6 @@ export default async function handler(req, res) {
         details: 'conversationId is required' 
       });
     }
-    
-    console.log('Conversation length:', conversationHistory?.length);
-    
-    // Debug: Log messages to understand file upload format
-    const fileMessages = conversationHistory.filter(msg => 
-      msg.role === 'user' && (msg.content.includes('📎') || msg.content.includes('User uploaded'))
-    );
-    console.log('File upload messages found:', fileMessages.length);
-    fileMessages.forEach((msg, i) => {
-      console.log(`File message ${i}:`, {
-        content: msg.content.substring(0, 100),
-        hasFileProperty: !!msg.file,
-        fileKeys: msg.file ? Object.keys(msg.file) : 'none'
-      });
-    });
 
     // Extract any uploaded files from conversation and let AI categorize them
     const uploadedFiles = (conversationHistory || [])
@@ -213,15 +196,59 @@ ${(conversationHistory || []).map(msg => `${msg.role.toUpperCase()}: ${msg.conte
     // Remove fileCategories from leadData since we've processed it
     const { fileCategories, ...cleanLeadData } = leadData;
 
+    // Create full conversation transcript and upload to Vercel Blob
+    let chatTranscriptUrl = null;
+    try {
+      // Create comprehensive transcript with metadata
+      const conversationTranscript = {
+        conversationId: conversationId,
+        timestamp: new Date().toISOString(),
+        source: "AI Chat Widget",
+        conversationLength: conversationHistory?.length || 0,
+        extractedBrief: cleanLeadData,
+        fullConversation: conversationHistory.map((msg, index) => ({
+          messageNumber: index + 1,
+          role: msg.role,
+          content: msg.content,
+          timestamp: new Date().toISOString(), // Would be better with actual timestamps
+          ...(msg.file && { attachedFile: msg.file })
+        })),
+        uploadedFiles: categorizedUploadedFiles,
+        systemMetadata: {
+          autoSubmit: req.body.autoSubmit || false,
+          browserClose: req.body.browserClose || false,
+          submissionTrigger: req.body.source || 'manual'
+        }
+      };
+
+      // Generate filename with timestamp for easy sorting
+      const transcriptFilename = `conversation-${conversationId}-${Date.now()}.json`;
+      
+      // Upload transcript to Vercel Blob
+      const transcriptBlob = await put(transcriptFilename, JSON.stringify(conversationTranscript, null, 2), {
+        access: 'public',
+        contentType: 'application/json'
+      });
+
+      chatTranscriptUrl = transcriptBlob.url;
+      console.log('Conversation transcript uploaded:', chatTranscriptUrl);
+
+    } catch (transcriptError) {
+      console.error('Failed to create conversation transcript:', transcriptError);
+      // Don't fail the entire submission if transcript upload fails
+    }
+
     // Add system metadata (consistent with rigid structure)
     const finalPayload = {
       ...cleanLeadData,
       // System metadata
       conversationId: conversationId,
       timestamp: new Date().toISOString(),
-      source: "IM Chat Widget",
+      source: "AI Chat Widget",
       conversationLength: conversationHistory?.length || 0,
       extractedAt: new Date().toISOString(),
+      // NEW: Chat transcript URL for full conversation review
+      chatTranscriptUrl: chatTranscriptUrl,
       // Enhanced file categorization
       uploadedFiles: categorizedUploadedFiles.length > 0 ? categorizedUploadedFiles : undefined,
       // Simplified URL arrays for Relay
@@ -235,48 +262,9 @@ ${(conversationHistory || []).map(msg => `${msg.role.toUpperCase()}: ${msg.conte
       // Reference for later file uploads
       emailReference: `Project REF: ${conversationId}`,
       fileUploadInstructions: categorizedUploadedFiles.length === 0 ? 
-        `To send files later, email them to jacob@intelligencematters.se with subject: "Project REF: ${conversationId}". Please specify if sending PRODUCT IMAGES (your actual products) or STYLE REFERENCES (inspiration examples).` : 
+        `To send files later, email them to ${process.env.CONTACT_EMAIL || 'contact@example.com'} with subject: "Project REF: ${conversationId}". Please specify if sending PRODUCT IMAGES (your actual products) or STYLE REFERENCES (inspiration examples).` : 
         undefined
     };
-
-    console.log('Sending RIGID JSON to Relay.app...');
-    console.log('Webhook URL:', RELAY_WEBHOOK_URL);
-    console.log('Payload size:', JSON.stringify(finalPayload).length, 'characters');
-    
-    // DEBUG: File payload verification
-    console.log('=== FILE PAYLOAD DEBUG ===');
-    console.log('uploadedFiles array length:', categorizedUploadedFiles.length);
-    console.log('productImageUrls:', productImageUrls);
-    console.log('styleReferenceUrls:', styleReferenceUrls);
-    console.log('totalFiles:', finalPayload.totalFiles);
-    
-    if (categorizedUploadedFiles.length > 0) {
-      console.log('uploadedFiles in payload:');
-      categorizedUploadedFiles.forEach((file, i) => {
-        console.log(`  File ${i}:`, {
-          fileName: file.fileName,
-          fileUrl: file.fileUrl,
-          type: file.type,
-          category: file.category
-        });
-      });
-    } else {
-      console.log('WARNING: No files found in uploadedFiles array');
-    }
-    
-    // Show full payload structure for file-related fields
-    const fileFields = {
-      uploadedFiles: finalPayload.uploadedFiles,
-      productImageUrls: finalPayload.productImageUrls,
-      styleReferenceUrls: finalPayload.styleReferenceUrls,
-      totalFiles: finalPayload.totalFiles,
-      productImageCount: finalPayload.productImageCount,
-      styleReferenceCount: finalPayload.styleReferenceCount
-    };
-    console.log('File-related payload fields:', JSON.stringify(fileFields, null, 2));
-    console.log('=== END FILE PAYLOAD DEBUG ===');
-    
-    console.log('FULL PAYLOAD:', JSON.stringify(finalPayload, null, 2));
 
     // Send to Relay.app webhook
     const webhookResponse = await fetch(RELAY_WEBHOOK_URL, {
@@ -287,24 +275,17 @@ ${(conversationHistory || []).map(msg => `${msg.role.toUpperCase()}: ${msg.conte
       body: JSON.stringify(finalPayload),
     });
 
-    const webhookResult = await webhookResponse.text();
-    console.log('Webhook response status:', webhookResponse.status);
-    console.log('Webhook response headers:', Object.fromEntries(webhookResponse.headers.entries()));
-    console.log('Webhook response body:', webhookResult);
-
     if (!webhookResponse.ok) {
-      console.error('WEBHOOK ERROR DETAILS:');
-      console.error('Status:', webhookResponse.status);
-      console.error('Status Text:', webhookResponse.statusText);
-      console.error('Response Body:', webhookResult);
-      console.error('Payload Size:', JSON.stringify(finalPayload).length, 'characters');
-      throw new Error(`Webhook failed: ${webhookResponse.status} ${webhookResponse.statusText} - ${webhookResult}`);
+      const errorText = await webhookResponse.text();
+      console.error('Webhook failed:', webhookResponse.status, webhookResponse.statusText);
+      throw new Error(`Webhook failed: ${webhookResponse.status} ${webhookResponse.statusText}`);
     }
 
     res.status(200).json({ 
       success: true, 
-      message: 'Rigid JSON structure submitted successfully to Relay.app',
+      message: 'Brief submitted successfully',
       leadData: finalPayload,
+      chatTranscriptUrl: chatTranscriptUrl, // Include transcript URL in response
       quickAnalysis: {
         requestType: cleanLeadData.requestType,
         readinessLevel: cleanLeadData.readinessLevel,

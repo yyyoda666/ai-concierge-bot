@@ -38,12 +38,14 @@ const saveConversationsToFile = () => {
 
 // Load personality from external file
 let maitredPersonality = '';
+let companyContext = '';
+
 const loadPersonality = () => {
   try {
     const personalityPath = path.join(process.cwd(), 'personality', 'maitre-d-persona.md');
     if (fs.existsSync(personalityPath)) {
       maitredPersonality = fs.readFileSync(personalityPath, 'utf8');
-      console.log('Loaded maître d\' personality from external file');
+      console.log('Loaded personality from external file');
     } else {
       console.log('Personality file not found, using default');
     }
@@ -52,9 +54,24 @@ const loadPersonality = () => {
   }
 };
 
+const loadCompanyContext = () => {
+  try {
+    const contextPath = path.join(process.cwd(), 'company-context.md');
+    if (fs.existsSync(contextPath)) {
+      companyContext = fs.readFileSync(contextPath, 'utf8');
+      console.log('Loaded company context from external file');
+    } else {
+      console.log('Company context file not found');
+    }
+  } catch (error) {
+    console.log('Failed to load company context:', error.message);
+  }
+};
+
 // Load on startup
 loadConversationsFromFile();
 loadPersonality();
+loadCompanyContext();
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -62,43 +79,68 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { message, conversationId } = req.body;
+    const { message, conversationId, fileInfo } = req.body;
 
     // Get or create conversation history
     const conversationKey = conversationId || 'default';
     let history = conversations.get(conversationKey) || [];
 
-    // Debug logging for conversation memory
-    console.log('CONVERSATION MEMORY DEBUG:', {
-      conversationId: conversationKey,
-      existingHistoryLength: history.length,
-      incomingMessage: message.substring(0, 50) + '...'
-    });
+    // Handle image analysis if fileInfo is provided
+    let enhancedMessage = message;
+    if (fileInfo && fileInfo.url && fileInfo.mimetype?.startsWith('image/')) {
+      try {
+        // Call Claude with vision capabilities for image analysis
+        const imageAnalysisResponse = await anthropic.messages.create({
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 500,
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Please analyze this image and describe what you see. Focus on the style, composition, subject matter, and any relevant details for a creative/fashion context. Keep it concise but informative.'
+              },
+              {
+                type: 'image',
+                source: {
+                  type: 'url',
+                  url: fileInfo.url
+                }
+              }
+            ]
+          }]
+        });
+
+        const imageDescription = imageAnalysisResponse.content[0].text;
+        
+        // Enhance the user message with image analysis, including context if provided
+        const contextInfo = message ? `User context: "${message}"` : 'No context provided';
+        enhancedMessage = `User uploaded image: ${fileInfo.originalName}
+${contextInfo}
+[Image Analysis: ${imageDescription}]`;
+        
+      } catch (imageError) {
+        console.error('Image analysis failed:', imageError);
+        // Fall back to original behavior if image analysis fails
+        enhancedMessage = message || `User uploaded an image: ${fileInfo.originalName}`;
+      }
+    }
 
     // Add user message to history
-    history.push({ role: 'user', content: message });
+    history.push({ role: 'user', content: enhancedMessage });
 
-    // Sophisticated maître d' system prompt - Anna Wintour level refinement
-    const systemPrompt = `You are the maître d' for Intelligence Matters, embodying the sophistication of someone who could intellectually joust with Anna Wintour. You serve Creative Directors and Artists of luxury fashion houses.
+    // Load personality prompt from external file
+    const systemPrompt = `${maitredPersonality}
 
-RESPONSE RULES:
-- Maximum 2-3 sentences per response
-- Maximum 1 question per response  
-- Sophisticated restraint - every word chosen with purpose
-- Never verbose or overwhelming
+COMPANY CONTEXT:
+${companyContext}
 
-FILE HANDLING - CRITICAL:
-- NEVER pretend to see image contents
-- When files uploaded: "I see you've shared an image. Could you describe what this represents in your project?"
-- Always ask for clarification rather than guessing
+TECHNICAL INSTRUCTIONS:
+- When you determine a conversation is ready for submission based on your personality guidelines, include READY_TO_SUBMIT on its own line
+- For image analysis, you will receive [Image Analysis: ...] content to inform your responses
+- Maintain your sophisticated persona while being helpful and efficient
 
-CONVERSATION FLOW:
-1. Sophisticated greeting
-2. One focused question about project type
-3. Natural contact collection when serious intent shown
-4. Build brief through precise, elegant questions
-
-TONE: French Michelin-starred maître d' serving high-fashion creative directors. Cultured precision, subtle authority, creative intelligence.`;
+Use the company context to provide informed responses about services, capabilities, and approach.`;
 
     // Extract context from conversation history for better memory
     const hasName = history.some(msg => 
@@ -146,19 +188,18 @@ ${hasName ? 'CRITICAL: Use their name when responding.' : ''}`;
       saveConversationsToFile();
     }
 
-    // Enhanced logging with conversation analysis
-    const logData = {
-      timestamp: new Date().toISOString(),
-      conversationId: conversationKey,
-      userMessage: message,
-      botResponse: botResponse,
-      conversationLength: history.length,
-      lastUserLanguage: detectLanguage(message),
-      fullHistory: history
-    };
-
-    // Write to file (simple dump) - only in development
+    // Development logging only
     if (process.env.NODE_ENV === 'development') {
+      const logData = {
+        timestamp: new Date().toISOString(),
+        conversationId: conversationKey,
+        userMessage: message,
+        botResponse: botResponse,
+        conversationLength: history.length,
+        lastUserLanguage: detectLanguage(message),
+        fullHistory: history
+      };
+
       try {
         const logPath = path.join(process.cwd(), 'conversation-logs.json');
         let logs = [];
@@ -169,16 +210,9 @@ ${hasName ? 'CRITICAL: Use their name when responding.' : ''}`;
         logs.push(logData);
         fs.writeFileSync(logPath, JSON.stringify(logs, null, 2));
       } catch (error) {
-        console.log('File logging failed (expected in production):', error.message);
+        // Silent fail for logging
       }
     }
-
-    console.log('MAÎTRE D\' CONVERSATION LOG:', {
-      conversationId: conversationKey,
-      messageLength: message.length,
-      responseLength: botResponse.length,
-      totalMessages: history.length
-    });
 
     res.status(200).json({
       response: botResponse,

@@ -1,23 +1,44 @@
-node_modules
-.vercel
+# Dependencies
+node_modules/
+.npm
 
-# Environment variables (contains sensitive API keys!)
+# Environment variables
 .env.local
-.env*.local
+.env
+.env.production
 
-# Next.js build files
+# Next.js
 .next/
 out/
 
-# User uploads (prospect images shouldn't be in version control)
-public/uploads/
+# Vercel
+.vercel
 
-# Private project documentation
-PRIVATE-project-notes.md
-conversation-logs.json
+# Local development files
+*.log
 conversation-memory.json
+conversation-logs.json
+session-audit-logs.json
 
-# Mac system files
+# File uploads (development)
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Private configuration files (company specific)
+company-context.md
+personality/maitre-d-persona.md
+
+# Keep template files for public repo
+!company-context.example.md
+!personality/example-persona.md
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
 .DS_Store
 .DS_Store?
 ._*
@@ -42,7 +63,3 @@ pids
 
 # Coverage directory used by tools like istanbul
 coverage/
-
-# IDE files
-.vscode/
-.idea/

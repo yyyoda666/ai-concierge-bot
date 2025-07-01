@@ -17,10 +17,8 @@ export default function ChatWidget() {
   const fileInputRef = useRef(null);
 
   // Auto-submit configuration
-  const AUTO_SUBMIT_DELAY = 5 * 60 * 1000; // 5 minutes in milliseconds
-  const WARNING_TIME = 60 * 1000; // Show warning 1 minute before auto-submit
-
-
+  const AUTO_SUBMIT_DELAY = 60 * 1000; // 60 seconds in milliseconds (reduced from 5 minutes)
+  const WARNING_TIME = 10 * 1000; // Show warning 10 seconds before auto-submit
 
   // Communicate height changes to parent iframe
   useEffect(() => {
@@ -29,6 +27,87 @@ export default function ChatWidget() {
       window.parent.postMessage({ type: 'resize', height }, '*');
     }
   }, [isExpanded]);
+
+  // Browser close detection and session audit
+  useEffect(() => {
+    const handleBeforeUnload = async (event) => {
+      // Check if we have a conversation worth saving
+      if (isConversationReadyForAutoSubmit() && !hasAutoSubmitted) {
+        // Try to auto-submit before page closes
+        event.preventDefault();
+        event.returnValue = 'You have an ongoing conversation. Are you sure you want to leave?';
+        
+        // Use sendBeacon for reliable data transmission even as page closes
+        const conversationHistory = messages.map(msg => ({
+          role: msg.type === 'user' ? 'user' : 'assistant',
+          content: msg.content,
+          ...(msg.file && { file: msg.file })
+        }));
+
+        // Add browser close flag
+        conversationHistory.push({
+          role: 'system',
+          content: 'BROWSER_CLOSE: Brief automatically submitted due to user leaving page'
+        });
+
+        const payload = JSON.stringify({
+          conversationHistory,
+          conversationId,
+          browserClose: true,
+          source: 'browser_close_detection'
+        });
+
+        // Use sendBeacon for reliable transmission even during page unload
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/submit-brief', payload);
+        }
+        
+        return event.returnValue;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden && isConversationReadyForAutoSubmit() && !hasAutoSubmitted) {
+        // Page became hidden, potentially about to close
+        setTimeUntilAutoSubmit(null);
+        // Reset auto-submit timer to be more aggressive
+        resetAutoSubmitTimer();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [messages, hasAutoSubmitted, conversationId]);
+
+  // Session audit logging
+  useEffect(() => {
+    const auditLog = {
+      timestamp: new Date().toISOString(),
+      conversationId,
+      messageCount: messages.length,
+      hasFiles: messages.some(msg => msg.file),
+      readyForSubmit: isConversationReadyForAutoSubmit(),
+      autoSubmitted: hasAutoSubmitted,
+      isExpanded,
+      location: window.location.href
+    };
+
+    // Send audit log (non-blocking)
+    if (messages.length > 0) {
+      fetch('/api/session-audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(auditLog)
+      }).catch(() => {
+        // Silent fail for audit logging
+      });
+    }
+  }, [messages.length, hasAutoSubmitted, isExpanded]);
 
   // Function to check if conversation is ready for auto-submit
   const isConversationReadyForAutoSubmit = () => {
@@ -261,27 +340,38 @@ export default function ChatWidget() {
       });
 
       const data = await response.json();
-      setMessages(prev => [...prev, { type: 'bot', content: data.response }]);
       
-      // Check if we should show submit mode (smart logic based on conversation content)
-      // Only show submit mode if we have substantial project discussion, not just contact collection
-      const hasProjectContent = messages.some(msg => 
-        msg.type === 'bot' && (
-          msg.content.toLowerCase().includes('brief') ||
-          msg.content.toLowerCase().includes('project') ||
-          msg.content.toLowerCase().includes('shoot') ||
-          msg.content.toLowerCase().includes('test')
-        )
-      );
-      const hasContactInfo = messages.some(msg => 
-        msg.type === 'user' && (
-          msg.content.includes('@') || // likely email
-          msg.content.toLowerCase().includes('name')
-        )
-      );
+      // Check if AI triggered READY_TO_SUBMIT
+      const aiTriggeredSubmit = data.response.includes('READY_TO_SUBMIT');
       
-      if (messages.length >= 6 && hasProjectContent && hasContactInfo) {
+      // Clean the response by removing READY_TO_SUBMIT if present
+      const cleanResponse = data.response.replace(/READY_TO_SUBMIT\s*/g, '').trim();
+      
+      setMessages(prev => [...prev, { type: 'bot', content: cleanResponse }]);
+      
+      // Show submit mode if AI triggered it or fallback to old logic
+      if (aiTriggeredSubmit) {
         setShowSubmitMode(true);
+      } else {
+        // Fallback logic for backwards compatibility
+        const hasProjectContent = messages.some(msg => 
+          msg.type === 'bot' && (
+            msg.content.toLowerCase().includes('brief') ||
+            msg.content.toLowerCase().includes('project') ||
+            msg.content.toLowerCase().includes('shoot') ||
+            msg.content.toLowerCase().includes('test')
+          )
+        );
+        const hasContactInfo = messages.some(msg => 
+          msg.type === 'user' && (
+            msg.content.includes('@') || // likely email
+            msg.content.toLowerCase().includes('name')
+          )
+        );
+        
+        if (messages.length >= 6 && hasProjectContent && hasContactInfo) {
+          setShowSubmitMode(true);
+        }
       }
     } catch (error) {
       console.error('Error:', error);
@@ -320,23 +410,6 @@ export default function ChatWidget() {
     setIsSubmitting(true);
     
     try {
-      // ===== DEBUG CODE START =====
-      console.log('=== MESSAGE CONVERSION DEBUG ===');
-      console.log('Total messages:', messages.length);
-      const messagesWithFiles = messages.filter(msg => msg.file);
-      console.log('Messages with files BEFORE conversion:', messagesWithFiles.length);
-      
-      messagesWithFiles.forEach((msg, i) => {
-        console.log(`UI Message ${i} with file:`, {
-          content: msg.content.substring(0, 50) + '...',
-          hasFile: !!msg.file,
-          fileUrl: msg.file?.url,
-          fileName: msg.file?.originalName,
-          fileKeys: msg.file ? Object.keys(msg.file) : 'none'
-        });
-      });
-      // ===== DEBUG CODE END =====
-
       // Convert messages format to match API expectations
       const conversationHistory = messages.map(msg => ({
         role: msg.type === 'user' ? 'user' : 'assistant',
@@ -344,22 +417,6 @@ export default function ChatWidget() {
         // Include file information if present
         ...(msg.file && { file: msg.file })
       }));
-
-      // ===== MORE DEBUG CODE START =====
-      const historyWithFiles = conversationHistory.filter(msg => msg.file);
-      console.log('Messages with files AFTER conversion:', historyWithFiles.length);
-      
-      historyWithFiles.forEach((msg, i) => {
-        console.log(`Converted Message ${i} with file:`, {
-          content: msg.content.substring(0, 50) + '...',
-          hasFile: !!msg.file,
-          fileUrl: msg.file?.url,
-          fileName: msg.file?.originalName,
-          role: msg.role
-        });
-      });
-      console.log('=== END MESSAGE CONVERSION DEBUG ===');
-      // ===== MORE DEBUG CODE END =====
 
       const response = await fetch('/api/submit-brief', {
         method: 'POST',
@@ -377,7 +434,7 @@ export default function ChatWidget() {
         const hasFiles = data.leadData?.uploadedFiles?.length > 0;
         const fileMessage = hasFiles ? 
           '' : 
-          ` If you need to send visual references later, email them to jacob@intelligencematters.se with the subject "Project REF: ${conversationId}".`;
+          ` If you need to send visual references later, email them to the project contact with the subject "Project REF: ${conversationId}".`;
         
         setMessages(prev => [...prev, { 
           type: 'bot', 
