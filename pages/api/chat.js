@@ -142,30 +142,58 @@ TECHNICAL INSTRUCTIONS:
 
 Use the company context to provide informed responses about services, capabilities, and approach.`;
 
-    // Extract context from conversation history for better memory
-    const hasName = history.some(msg => 
-      msg.role === 'user' && (
-        msg.content.toLowerCase().includes('my name is') ||
-        msg.content.toLowerCase().includes('i\'m ') ||
-        /^[A-Z][a-z]+( [A-Z][a-z]+)*$/.test(msg.content.trim())
-      )
-    );
-    const hasEmail = history.some(msg => 
-      msg.role === 'user' && msg.content.includes('@')
-    );
-    const projectType = history.find(msg => 
-      msg.content.toLowerCase().includes('ecom') ||
-      msg.content.toLowerCase().includes('photography') ||
-      msg.content.toLowerCase().includes('shoot') ||
-      msg.content.toLowerCase().includes('concept') ||
-      msg.content.toLowerCase().includes('brand')
-    );
+    // LLM-based conversation analysis instead of brittle regex
+    const conversationAnalysisPrompt = `Analyze this conversation and determine what information has been collected:
+
+CONVERSATION:
+${history.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n')}
+
+Return ONLY this JSON format:
+{
+  "hasName": boolean,
+  "hasEmail": boolean, 
+  "hasProjectDetails": boolean,
+  "extractedName": "string or null",
+  "readyForSubmission": boolean
+}
+
+Guidelines:
+- hasName: true if user provided their actual name (not just mentioned someone else's name)
+- hasEmail: true if user provided their actual email address 
+- hasProjectDetails: true if there are concrete project requirements discussed
+- extractedName: the actual name if provided, null otherwise
+- readyForSubmission: true if conversation has sufficient details for a meaningful brief`;
+
+    let conversationState;
+    try {
+      const analysisResponse = await anthropic.messages.create({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 200,
+        messages: [{ role: 'user', content: conversationAnalysisPrompt }]
+      });
+      
+      conversationState = JSON.parse(analysisResponse.content[0].text);
+    } catch (error) {
+      console.error('Conversation analysis failed, using fallback:', error);
+      // Fallback to simple detection
+      conversationState = {
+        hasName: history.some(msg => msg.role === 'user' && msg.content.toLowerCase().includes('name')),
+        hasEmail: history.some(msg => msg.role === 'user' && msg.content.includes('@')),
+        hasProjectDetails: history.length > 3,
+        extractedName: null,
+        readyForSubmission: false
+      };
+    }
 
     // Add context awareness to system prompt  
     const contextAwarePrompt = systemPrompt + `
 
-CONTEXT: ${hasName ? 'Name provided' : 'Name needed'}, ${hasEmail ? 'Email provided' : 'Email needed'}, ${history.length} messages
-${hasName ? 'CRITICAL: Use their name when responding.' : ''}`;
+CONVERSATION STATE: ${JSON.stringify(conversationState)}
+${conversationState.hasName ? `CRITICAL: Use ${conversationState.extractedName || 'their name'} when responding - do NOT ask for their name again.` : 'CRITICAL: Ask for their name naturally when appropriate.'}
+
+SUBMIT BUTTON INSTRUCTION:
+- When conversation has sufficient project details AND contact info, mention: "I can see you have a great project brief coming together. You can press the 'Submit Brief' button when you're ready, or we can continue refining the details."
+- Only mention the submit button once per conversation when appropriate`;
 
     // Call Claude with the sophisticated personality
     const response = await anthropic.messages.create({

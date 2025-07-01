@@ -17,8 +17,8 @@ export default function ChatWidget() {
   const fileInputRef = useRef(null);
 
   // Auto-submit configuration
-  const AUTO_SUBMIT_DELAY = 60 * 1000; // 60 seconds in milliseconds (reduced from 5 minutes)
-  const WARNING_TIME = 10 * 1000; // Show warning 10 seconds before auto-submit
+  const AUTO_SUBMIT_DELAY = 5 * 60 * 1000; // 5 minutes in milliseconds (was incorrectly 60 seconds)
+  const WARNING_TIME = 60 * 1000; // Show warning 1 minute before auto-submit
 
   // Communicate height changes to parent iframe
   useEffect(() => {
@@ -109,27 +109,62 @@ export default function ChatWidget() {
     }
   }, [messages.length, hasAutoSubmitted, isExpanded]);
 
+  // LLM-based conversation analysis function
+  const analyzeConversationState = async () => {
+    if (messages.length < 2) return { hasEmail: false, hasProjectDetails: false, readyForSubmission: false };
+    
+    try {
+      const analysisPrompt = `Analyze this conversation quickly:
+
+${messages.map(msg => `${msg.type.toUpperCase()}: ${msg.content}`).join('\n')}
+
+Return ONLY this JSON:
+{"hasEmail": boolean, "hasProjectDetails": boolean, "readyForSubmission": boolean}`;
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: analysisPrompt,
+          conversationId: conversationId + '_analysis',
+          skipLogging: true
+        })
+      });
+
+      const data = await response.json();
+      const jsonMatch = data.response.match(/\{[^}]+\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+    } catch (error) {
+      console.error('Analysis failed:', error);
+    }
+    
+    // Fallback to simple detection
+    return {
+      hasEmail: messages.some(msg => msg.type === 'user' && msg.content.includes('@')),
+      hasProjectDetails: messages.length > 4,
+      readyForSubmission: false
+    };
+  };
+
   // Function to check if conversation is ready for auto-submit
   const isConversationReadyForAutoSubmit = () => {
     // Don't auto-submit if we already have
     if (hasAutoSubmitted) return false;
     
-    const hasProjectContent = messages.some(msg => 
+    // Use simpler heuristics for auto-submit (LLM analysis is too expensive for frequent checks)
+    const hasEmail = messages.some(msg => msg.type === 'user' && msg.content.includes('@'));
+    const hasSubstantialConversation = messages.length >= 8; // Increased from 4 to 8 messages
+    const hasProjectMentions = messages.some(msg => 
       msg.type === 'bot' && (
         msg.content.toLowerCase().includes('brief') ||
         msg.content.toLowerCase().includes('project') ||
-        msg.content.toLowerCase().includes('shoot') ||
-        msg.content.toLowerCase().includes('test')
-      )
-    );
-    const hasContactInfo = messages.some(msg => 
-      msg.type === 'user' && (
-        msg.content.includes('@') || // likely email
-        msg.content.toLowerCase().includes('name')
+        msg.content.toLowerCase().includes('submit')
       )
     );
     
-    return messages.length >= 4 && hasProjectContent && hasContactInfo;
+    return hasSubstantialConversation && hasEmail && hasProjectMentions;
   };
 
   // Auto-submit timer management
@@ -353,25 +388,12 @@ export default function ChatWidget() {
       if (aiTriggeredSubmit) {
         setShowSubmitMode(true);
       } else {
-        // Fallback logic for backwards compatibility
-        const hasProjectContent = messages.some(msg => 
-          msg.type === 'bot' && (
-            msg.content.toLowerCase().includes('brief') ||
-            msg.content.toLowerCase().includes('project') ||
-            msg.content.toLowerCase().includes('shoot') ||
-            msg.content.toLowerCase().includes('test')
-          )
-        );
-        const hasContactInfo = messages.some(msg => 
-          msg.type === 'user' && (
-            msg.content.includes('@') || // likely email
-            msg.content.toLowerCase().includes('name')
-          )
-        );
-        
-        if (messages.length >= 6 && hasProjectContent && hasContactInfo) {
-          setShowSubmitMode(true);
-        }
+        // Fallback logic - use LLM analysis for better accuracy
+        analyzeConversationState().then(state => {
+          if (state.readyForSubmission || (messages.length >= 6 && state.hasEmail && state.hasProjectDetails)) {
+            setShowSubmitMode(true);
+          }
+        });
       }
     } catch (error) {
       console.error('Error:', error);
@@ -398,12 +420,12 @@ export default function ChatWidget() {
     }
 
     // Check if we have sufficient information to submit
-    const hasContactInfo = messages.some(msg => 
+    const hasEmail = messages.some(msg => 
       msg.type === 'user' && msg.content.includes('@')
     );
     
-    if (!hasContactInfo) {
-      alert('Please provide your contact details first before submitting the brief.');
+    if (!hasEmail) {
+      alert('Please provide your email address first before submitting the brief.');
       return;
     }
 

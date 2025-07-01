@@ -420,5 +420,23 @@
       "role": "assistant",
       "content": "Perfect. Our e-commerce package would include multiple angles and styling variations. What's your target budget or timeline for this project, Axel?"
     }
+  ],
+  "conv_1751388539766": [
+    {
+      "role": "user",
+      "content": "hi"
+    },
+    {
+      "role": "assistant",
+      "content": "Welcome. How may I assist your creative vision today? May I have your first name?"
+    },
+    {
+      "role": "user",
+      "content": "axel"
+    },
+    {
+      "role": "assistant",
+      "content": "Thank you, Axel. I'd be pleased to explore your creative interests. What type of project are you considering?"
+    }
   ]
 }
